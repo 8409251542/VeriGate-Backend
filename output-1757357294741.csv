@@ -1,0 +1,6 @@
+valid,local_format,country_code,country_name,location,carrier,line_type
+true,5135796739,US,United States of America,Cincinnati,,landline
+true,8887030177,US,United States of America,,,toll_free
+true,8001036952,US,United States of America,,,toll_free
+true,08409251542,IN,India (Republic of),Bihar,Telenor (India) Communications Pvt. Ltd,mobile
+true,07520164321,IN,India (Republic of),Bihar,Vodafone Idea Ltd (formerly Vodafone India Ltd),mobile

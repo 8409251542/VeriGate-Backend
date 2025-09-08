@@ -10,6 +10,7 @@ const axios = require("axios");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 const path = require("path");
+const XLSX = require("xlsx");
 
 
 const app = express();
@@ -219,15 +220,12 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     .eq("id", userId)
     .single();
 
-  if (error || !userData) {
-    return res.status(404).json({ message: "User not found" });
-  }
-  if (userData.used >= userData.max_limit) {
-    return res.status(403).json({ message: "Limit exceeded" });
-  }
+  if (error || !userData) return res.status(404).json({ message: "User not found" });
+  if (userData.used >= userData.max_limit) return res.status(403).json({ message: "Limit exceeded" });
 
   // 2️⃣ Parse file into numbers
   let numbers = [];
+
   if (ext === "csv") {
     numbers = await new Promise((resolve, reject) => {
       const arr = [];
@@ -237,6 +235,16 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
         .on("end", () => resolve(arr))
         .on("error", reject);
     });
+  } else if (ext === "xlsx" || ext === "xls") {
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    numbers = sheet.map(row => row["phone"]);
+  } else if (ext === "txt") {
+    const content = fs.readFileSync(filePath, "utf8");
+    numbers = content.split(/\r?\n/).map(line => line.trim());
+  } else {
+    return res.status(400).json({ message: "Unsupported file type. Use CSV, XLSX, or TXT." });
   }
 
   // 3️⃣ Deduplicate
@@ -256,7 +264,6 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
 
       if (apiRes.data.valid) {
         processed++;
-
         verifiedRows.push({
           valid: apiRes.data.valid || false,
           local_format: apiRes.data.local_format || "",
@@ -270,7 +277,7 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     } catch (err) {
       console.error("❌ Error verifying", phone, err.message);
     }
-    await sleep(1000); // throttle to avoid rate-limit
+    await new Promise(r => setTimeout(r, 1000)); // throttle API
   }
 
   // 4️⃣ Update DB usage
@@ -291,15 +298,11 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     },
   ]).select("id");
 
-  // 6️⃣ Generate CSV in memory
+  // 6️⃣ Save CSV output locally
   const outputPath = path.join(__dirname, `output-${Date.now()}.csv`);
   await new Promise((resolve, reject) => {
     const ws = fs.createWriteStream(outputPath);
-    fastcsv
-      .write(verifiedRows, { headers: true })
-      .pipe(ws)
-      .on("finish", resolve)
-      .on("error", reject);
+    fastcsv.write(verifiedRows, { headers: true }).pipe(ws).on("finish", resolve).on("error", reject);
   });
 
   // 7️⃣ Upload to Supabase Storage
@@ -307,27 +310,18 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   const storageFileName = `verified/output-${Date.now()}.csv`;
 
   const { error: uploadError } = await supabase.storage
-    .from("csv-outputs") // 👈 create this bucket in Supabase
-    .upload(storageFileName, fileBuffer, {
-      contentType: "text/csv",
-      upsert: true,
-    });
+    .from("csv-outputs")
+    .upload(storageFileName, fileBuffer, { contentType: "text/csv", upsert: true });
 
-  if (uploadError) {
-    console.error("❌ Storage upload error:", uploadError.message);
-    return res.status(500).json({ message: "File upload failed" });
-  }
+  if (uploadError) return res.status(500).json({ message: "File upload failed" });
 
-  // 8️⃣ Generate signed URL (valid 1 hour)
+  // 8️⃣ Signed URL
   const { data: signedUrl } = await supabase.storage
     .from("csv-outputs")
     .createSignedUrl(storageFileName, 60 * 60);
 
-  // 9️⃣ Update DB history with storage path
-  await supabase
-    .from("verification_history")
-    .update({ file_path: storageFileName })
-    .eq("id", saved[0].id);
+  // 9️⃣ Update DB with file path
+  await supabase.from("verification_history").update({ file_path: storageFileName }).eq("id", saved[0].id);
 
   res.json({
     message: "Verification completed",
@@ -335,13 +329,9 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     duplicates,
     unique_count: uniqueNumbers.length,
     verified_count: processed,
-    fileUrl: signedUrl.signedUrl, // ✅ direct download link
+    fileUrl: signedUrl.signedUrl,
   });
 });
-
-
-
-
 
 // Register user with extra fields
 app.post("/register", async (req, res) => {
