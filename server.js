@@ -9,6 +9,7 @@ const fastcsv = require("fast-csv");
 const axios = require("axios");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
+const path = require("path");
 
 
 const app = express();
@@ -196,17 +197,20 @@ app.post("/verify-number", async (req, res) => {
   }
 });
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 
 // Upload CSV + Verify with NumVerify + User Limit Check
 // Upload CSV + Verify with NumVerify + User Limit Check
+// add at top
 app.post("/upload-csv", upload.single("file"), async (req, res) => {
   const { userId } = req.body;
   const filePath = req.file.path;
-  const results = [];
+  const ext = req.file.originalname.split(".").pop().toLowerCase();
 
-  console.log("👉 Upload request received");
-  console.log("👉 userId:", userId);
-  console.log("👉 Uploaded file path:", filePath);
+  console.log("👉 Upload request:", req.file.originalname);
 
   // 1️⃣ Validate user
   const { data: userData, error } = await supabase
@@ -216,93 +220,125 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     .single();
 
   if (error || !userData) {
-    console.error("❌ User not found in DB");
     return res.status(404).json({ message: "User not found" });
   }
-
-  console.log("✅ User found:", userData);
-
   if (userData.used >= userData.max_limit) {
-    console.warn("⚠️ User limit exceeded");
     return res.status(403).json({ message: "Limit exceeded" });
   }
 
-  // 2️⃣ Parse CSV
-  fs.createReadStream(filePath)
-    .pipe(csv({
-    mapHeaders: ({ header }) => header.trim().toLowerCase() // normalize headers
-  }))
-    .on("data", row => {
-      console.log("📂 Row read from CSV:", row); // 👈 Debug log
-      results.push(row);
-    })
-    .on("end", async () => {
-      console.log("✅ Finished reading CSV. Total rows:", results.length);
-
-      let mobiles = [];
-      let landlines = [];
-      let processed = 0;
-
-      for (let row of results) {
-        let phone = row["phone"];
-        console.log("👉 Processing phone:", phone);
-
-        if (!phone) continue;
-
-        if (!phone.startsWith("+")) {
-          phone = "+" + phone;
-        }
-
-        if (userData.used + processed >= userData.max_limit) break;
-
-        try {
-          const url = `http://apilayer.net/api/validate?access_key=${process.env.NUMVERIFY_API_KEY}&number=${phone}`;
-          const apiRes = await axios.get(url);
-
-          console.log("📞 NumVerify response:", apiRes.data);
-
-          if (apiRes.data.valid) {
-            if (apiRes.data.line_type === "mobile") mobiles.push(phone);
-            else landlines.push(phone);
-
-            processed++;
-          }
-        } catch (err) {
-          console.error(`❌ Error verifying ${phone}:`, err.message);
-        }
-      }
-
-      console.log("📊 Processed count:", processed);
-      console.log("📱 Mobiles:", mobiles);
-      console.log("☎️ Landlines:", landlines);
-
-      // 3️⃣ Update DB usage
-      await supabase
-        .from("user_limits")
-        .update({ used: userData.used + processed })
-        .eq("id", userId);
-
-      // 4️⃣ Generate CSV output
-      const outputPath = `uploads/output-${Date.now()}.csv`;
-      const ws = fs.createWriteStream(outputPath);
-
-      const rows = [];
-      for (let i = 0; i < Math.max(mobiles.length, landlines.length); i++) {
-        rows.push({
-          "mobile no.": mobiles[i] || "",
-          "landline no.": landlines[i] || ""
-        });
-      }
-
-      fastcsv
-        .write(rows, { headers: true })
-        .pipe(ws)
-        .on("finish", () => {
-          console.log("✅ Output CSV generated:", outputPath);
-          res.download(outputPath, "verified.csv");
-        });
+  // 2️⃣ Parse file into numbers
+  let numbers = [];
+  if (ext === "csv") {
+    numbers = await new Promise((resolve, reject) => {
+      const arr = [];
+      fs.createReadStream(filePath)
+        .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
+        .on("data", row => arr.push(row["phone"]))
+        .on("end", () => resolve(arr))
+        .on("error", reject);
     });
+  }
+
+  // 3️⃣ Deduplicate
+  const uniqueNumbers = [...new Set(numbers.filter(Boolean))];
+  const duplicates = numbers.length - uniqueNumbers.length;
+
+  let verifiedRows = [];
+  let processed = 0;
+
+  for (let phone of uniqueNumbers) {
+    if (!phone) continue;
+    if (userData.used + processed >= userData.max_limit) break;
+
+    try {
+      const url = `http://apilayer.net/api/validate?access_key=${process.env.NUMVERIFY_API_KEY}&number=${phone}`;
+      const apiRes = await axios.get(url);
+
+      if (apiRes.data.valid) {
+        processed++;
+
+        verifiedRows.push({
+          valid: apiRes.data.valid || false,
+          local_format: apiRes.data.local_format || "",
+          country_code: apiRes.data.country_code || "",
+          country_name: apiRes.data.country_name || "",
+          location: apiRes.data.location || "",
+          carrier: apiRes.data.carrier || "",
+          line_type: apiRes.data.line_type || "",
+        });
+      }
+    } catch (err) {
+      console.error("❌ Error verifying", phone, err.message);
+    }
+    await sleep(1000); // throttle to avoid rate-limit
+  }
+
+  // 4️⃣ Update DB usage
+  await supabase
+    .from("user_limits")
+    .update({ used: userData.used + processed })
+    .eq("id", userId);
+
+  // 5️⃣ Save history
+  const { data: saved } = await supabase.from("verification_history").insert([
+    {
+      user_id: userId,
+      total_uploaded: numbers.length,
+      duplicates,
+      unique_count: uniqueNumbers.length,
+      verified_count: processed,
+      created_at: new Date(),
+    },
+  ]).select("id");
+
+  // 6️⃣ Generate CSV in memory
+  const outputPath = path.join(__dirname, `output-${Date.now()}.csv`);
+  await new Promise((resolve, reject) => {
+    const ws = fs.createWriteStream(outputPath);
+    fastcsv
+      .write(verifiedRows, { headers: true })
+      .pipe(ws)
+      .on("finish", resolve)
+      .on("error", reject);
+  });
+
+  // 7️⃣ Upload to Supabase Storage
+  const fileBuffer = fs.readFileSync(outputPath);
+  const storageFileName = `verified/output-${Date.now()}.csv`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("csv-outputs") // 👈 create this bucket in Supabase
+    .upload(storageFileName, fileBuffer, {
+      contentType: "text/csv",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error("❌ Storage upload error:", uploadError.message);
+    return res.status(500).json({ message: "File upload failed" });
+  }
+
+  // 8️⃣ Generate signed URL (valid 1 hour)
+  const { data: signedUrl } = await supabase.storage
+    .from("csv-outputs")
+    .createSignedUrl(storageFileName, 60 * 60);
+
+  // 9️⃣ Update DB history with storage path
+  await supabase
+    .from("verification_history")
+    .update({ file_path: storageFileName })
+    .eq("id", saved[0].id);
+
+  res.json({
+    message: "Verification completed",
+    total_uploaded: numbers.length,
+    duplicates,
+    unique_count: uniqueNumbers.length,
+    verified_count: processed,
+    fileUrl: signedUrl.signedUrl, // ✅ direct download link
+  });
 });
+
 
 
 
@@ -498,6 +534,99 @@ app.post("/get-user-details", async (req, res) => {
   }
 });
 
+app.get("/admin/history", async (req, res) => {
+  const { requesterId, start, end } = req.query;
+
+  // 1️⃣ Verify requester is an admin
+  const { data: admin, error: adminError } = await supabase
+    .from("admins")
+    .select("id")
+    .eq("id", requesterId)
+    .maybeSingle();
+
+  if (adminError || !admin) {
+    console.warn("❌ Unauthorized access attempt to /admin/history");
+    return res.status(403).json({ message: "Only admin can access history" });
+  }
+
+  // 2️⃣ Fetch history
+  let query = supabase
+    .from("verification_history")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (start && end) {
+    query = query.gte("created_at", start).lte("created_at", end);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("❌ Error fetching history:", error.message);
+    return res.status(500).json({ message: error.message });
+  }
+
+  // 3️⃣ Generate signed URLs for file_path
+  const enhanced = await Promise.all(
+    data.map(async (item) => {
+      if (item.file_path) {
+        const { data: signed, error: signedErr } = await supabase.storage
+          .from("csv-outputs")
+          .createSignedUrl(item.file_path, 60 * 60); // 1 hour
+
+        if (!signedErr && signed?.signedUrl) {
+          item.downloadUrl = signed.signedUrl;
+        }
+      }
+      return item;
+    })
+  );
+
+  res.json(enhanced);
+});
+
+
+app.get("/user-history", async (req, res) => {
+  const { userId } = req.query;
+
+  if (!userId) {
+    return res.status(400).json({ message: "userId is required" });
+  }
+
+  try {
+    // 1️⃣ Fetch history from DB
+    const { data, error } = await supabase
+      .from("verification_history")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) return res.status(500).json({ message: error.message });
+
+    // 2️⃣ Generate signed URLs for each stored file
+    const results = await Promise.all(
+      data.map(async (item) => {
+        if (!item.file_path) return item;
+
+        const { data: signedUrl, error: urlError } = await supabase.storage
+          .from("csv-outputs") // 👈 your bucket name
+          .createSignedUrl(item.file_path, 60 * 60); // 1 hour expiry
+
+        if (urlError) {
+          console.error("❌ Signed URL error:", urlError.message);
+          return { ...item, downloadUrl: null };
+        }
+
+        return { ...item, downloadUrl: signedUrl.signedUrl };
+      })
+    );
+
+    res.json(results);
+  } catch (err) {
+    console.error("🔥 /user-history error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 app.listen(5000, () => console.log("Server running on http://localhost:5000"));
