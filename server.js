@@ -303,9 +303,9 @@ const uniqueNumbers = [
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
 const clients = [
   new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
-  // new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-  // new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-  // new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
+  new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
+  new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
+  new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
   // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
 ];
 
@@ -704,7 +704,7 @@ app.post("/get-user-details", async (req, res) => {
     // 2️⃣ Get user limits
     const { data: limits, error: limitError } = await supabase
       .from("user_limits")
-      .select("max_limit, used")
+      .select("max_limit, used,usdt_balance")
       .eq("id", userId)
       .maybeSingle();
 
