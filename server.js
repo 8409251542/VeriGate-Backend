@@ -16,7 +16,7 @@ const NumlookupapiModule = require("@everapi/numlookupapi-js");
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
-const puppeteer = require('puppeteer');
+
 
 const Numlookup = NumlookupapiModule.default; // get the default class
 
