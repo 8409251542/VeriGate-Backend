@@ -302,7 +302,7 @@ const uniqueNumbers = [
 
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
 const clients = [
-  new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
+  new Numlookup(process.env.NUMLOOKUP_API_KEY_1), 
   new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
   new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
   new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
@@ -386,7 +386,7 @@ function formatPhone(phone) {
 
   // 6️⃣ Update DB usage (only valid numbers count)
  // 🟢 new code: deduct USDT based on verified numbers
-const costPerVerification = 0.00076;
+const costPerVerification = 0.0011;
 const totalCost = processed * costPerVerification;
 
 if (userData.usdt_balance < totalCost) {
@@ -1022,7 +1022,7 @@ app.post("/api/generate-invoice", async (req, res) => {
       phoneNumber, 
       supportPhone, 
       date, 
-      amount, 
+      amount,          // can be "189.25", "$189.25", "189.25 USDT" etc.
       transactionId, 
       invoiceNumber,
       logoUrl 
@@ -1031,7 +1031,7 @@ app.post("/api/generate-invoice", async (req, res) => {
     console.log("📝 Invoice generation request:", { userId, companyName, amount });
 
     // Validate required fields
-    if (!userId || !companyName || !phoneNumber || !amount) {
+    if (!userId || !companyName || !phoneNumber || amount == null) {
       return res.status(400).json({ 
         message: "Missing required fields: userId, companyName, phoneNumber, amount" 
       });
@@ -1055,78 +1055,114 @@ app.post("/api/generate-invoice", async (req, res) => {
       });
     }
 
-    // 2️⃣ Generate invoice HTML
+    // 2️⃣ Safely parse & format amount (fix NaN)
+    const rawAmount = amount;
+    const numericAmount = parseFloat(String(rawAmount).replace(/[^\d.]/g, ""));
+    const amountNumber = isNaN(numericAmount) ? 0 : numericAmount;
+    const amountDisplay = `$${amountNumber.toFixed(2)}`;   // e.g. "$189.25"
+
+    // 3️⃣ Generate invoice HTML (your function)
     const invoiceHTML = generateInvoiceHTML({
       companyName: companyName || "PAY PAL",
       phoneNumber: phoneNumber || "+1 858 426 0634",
       supportPhone: supportPhone || "+1 800 123 4567",
-      date: date || new Date().toISOString().split('T')[0],
-      amount: amount || "$0.00",
-      transactionId: transactionId || `TRX-${Math.floor(Math.random() * 100000000)}`,
+      date: date || new Date().toISOString().split("T")[0],
+      amount: amountDisplay,   // 👈 ALWAYS a nice string now
+      transactionId:
+        transactionId ||
+        `TRX-${Math.floor(100000000 + Math.random() * 900000000)}`,
       invoiceNumber: invoiceNumber || generateRandomInvoice(),
-      logoUrl: logoUrl || "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg"
+      logoUrl:
+        logoUrl ||
+        "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg",
     });
 
-    // 3️⃣ Launch headless browser and capture screenshot
+    // 4️⃣ Launch headless browser and capture screenshot (bigger & higher quality)
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     
     const page = await browser.newPage();
-    await page.setViewport({ width: 920, height: 800 });
-    await page.setContent(invoiceHTML, { waitUntil: 'networkidle0' });
-    
-    // Take screenshot
-    const screenshotBuffer = await page.screenshot({
-      type: 'jpeg',
-      quality: 90,
-      clip: {
-        x: 0,
-        y: 0,
-        width: 920,
-        height: 600
-      }
-    });
-    
-    await browser.close();
+    await page.setViewport({ width: 1000, height: 650 }); // a bit bigger → larger file
+    await page.setContent(invoiceHTML, { waitUntil: "networkidle0" });
 
-    // 4️⃣ Save invoice image
-    const invoicesDir = path.join(__dirname, "uploads/invoices");
-    if (!fs.existsSync(invoicesDir)) {
-      fs.mkdirSync(invoicesDir, { recursive: true });
+    const element = await page.$("#invoice-root");
+    let screenshotBuffer;
+
+    if (element) {
+      const box = await element.boundingBox();
+      screenshotBuffer = await page.screenshot({
+        type: "jpeg",
+        quality: 93,  // 🔺 higher quality → roughly 45–50 KB
+        clip: {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+        },
+      });
+    } else {
+      // fallback if #invoice-root not found
+      screenshotBuffer = await page.screenshot({
+        type: "jpeg",
+        quality: 93,
+        fullPage: false,
+      });
     }
 
-    const fileName = `invoice_${Date.now()}_${userId}.jpg`;
-    const filePath = path.join(invoicesDir, fileName);
-    fs.writeFileSync(filePath, screenshotBuffer);
+    await browser.close();
 
-    // 5️⃣ Deduct USDT from user balance
+    // 5️⃣ Upload invoice image to Supabase Storage (bucket: Invoice)
+    const fileName = `invoice_${Date.now()}_${userId}.jpg`;
+
+    const { error: storageError } = await supabase.storage
+      .from("Invoice")
+      .upload(fileName, screenshotBuffer, {
+        contentType: "image/jpeg",
+        upsert: true,
+      });
+
+    if (storageError) {
+      console.error("❌ Supabase invoice upload error:", storageError);
+      return res
+        .status(500)
+        .json({ message: "Failed to upload invoice image" });
+    }
+
+    const { data: publicData } = supabase.storage
+      .from("Invoice")
+      .getPublicUrl(fileName);
+
+    const downloadUrl = publicData.publicUrl;
+
+    // 6️⃣ Deduct USDT from user balance
+    const newBalance = userData.usdt_balance - invoiceCost;
+
     await supabase
       .from("user_limits")
-      .update({ usdt_balance: userData.usdt_balance - invoiceCost })
+      .update({ usdt_balance: newBalance })
       .eq("id", userId);
 
-    // 6️⃣ Save invoice history
+    // 7️⃣ Save invoice history (store numeric amount + Supabase URL)
     await supabase.from("invoice_history").insert([
       {
         user_id: userId,
         company_name: companyName,
-        amount: amount,
-        file_path: `/uploads/invoices/${fileName}`,
+        amount: amountNumber,            // numeric for DB
+        file_path: downloadUrl,
         usdt_used: invoiceCost,
         created_at: new Date(),
       },
     ]);
 
-    // 7️⃣ Return download URL
-    const downloadUrl = `http://localhost:5000/uploads/invoices/${fileName}`;
-    
+    // 8️⃣ Response
     res.json({
       message: "✅ Invoice generated successfully",
       downloadUrl,
+      amount: amountDisplay,
       usdt_used: invoiceCost,
-      remaining_balance: userData.usdt_balance - invoiceCost
+      remaining_balance: newBalance,
     });
 
   } catch (err) {
@@ -1137,6 +1173,8 @@ app.post("/api/generate-invoice", async (req, res) => {
     });
   }
 });
+
+
 
 // Helper function to generate random invoice number
 function generateRandomInvoice() {
@@ -1160,47 +1198,153 @@ function generateInvoiceHTML(data) {
 <head>
 <meta charset="utf-8">
 <style>
-:root{--pp-blue:#003087;--pp-accent:#009cde;--muted:#6b7280;--card-bg:#fff;}
-body{margin:0;font-family:Inter,Arial,sans-serif;background:#f6f9ff;padding:20px}
-.invoice{background:linear-gradient(180deg,#ffffff 0%, #fbfdff 100%);border-radius:12px;padding:24px;max-width:800px;margin:0 auto;box-shadow:0 8px 26px rgba(2,6,23,0.1)}
-.inv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.brand{display:flex;align-items:center;gap:12px}
-.brand img{height:44px;width:auto;border-radius:6px}
-.company{font-weight:700;color:var(--pp-blue);font-size:18px}
-.summary{display:flex;justify-content:space-between;padding:16px;border-radius:10px;background:linear-gradient(90deg, rgba(0,156,222,0.06), rgba(0,48,135,0.03));border:1px solid rgba(0,48,135,0.06);margin-bottom:20px}
-.label{font-size:13px;color:var(--muted);margin-bottom:6px}
-.big-amount{font-size:24px;font-weight:700;color:#081024}
-.service{font-size:12px;color:var(--muted);margin-top:4px}
-.status-badge{display:inline-block;padding:6px 12px;border-radius:999px;background:#e6fff0;color:#0a9443;font-weight:700;font-size:13px}
-.details{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.card .k{font-size:12px;color:var(--muted);margin-bottom:6px}
-.card .v{font-weight:600;color:#111;font-size:14px}
-.refund{font-size:12px;color:var(--muted);padding:12px 0;border-top:1px dashed #e9eef6}
+:root{
+  --pp-blue:#003087;
+  --pp-accent:#009cde;
+  --muted:#6b7280;
+  --card-bg:#ffffff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  background:#f3f6ff;
+  padding:24px 0;
+}
+#invoice-root{
+  background:linear-gradient(180deg,#ffffff 0%,#f9fbff 100%);
+  border-radius:16px;
+  padding:24px 28px;
+  max-width:780px;
+  margin:0 auto;
+  box-shadow:0 10px 30px rgba(15,23,42,.12);
+}
+.inv-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:20px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.brand img{
+  height:40px;
+  width:auto;
+  border-radius:8px;
+}
+.company{
+  font-weight:700;
+  color:var(--pp-blue);
+  font-size:18px;
+}
+.company-sub{
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.inv-top-right{
+  text-align:right;
+}
+.inv-top-right .heading{
+  font-size:13px;
+  color:var(--pp-blue);
+  margin-bottom:4px;
+}
+.status-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 12px;
+  border-radius:999px;
+  background:#e9fff2;
+  color:#16a34a;
+  font-weight:600;
+  font-size:13px;
+}
+.status-badge span.icon{
+  font-size:14px;
+}
+.summary{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  padding:16px 18px;
+  border-radius:12px;
+  background:linear-gradient(90deg,rgba(0,156,222,0.06),rgba(0,48,135,0.03));
+  border:1px solid rgba(15,23,42,0.06);
+  margin-bottom:20px;
+}
+.label{
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+.big-amount{
+  font-size:26px;
+  font-weight:700;
+  color:#020617;
+}
+.service{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:4px;
+}
+.details{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin-bottom:18px;
+}
+.card .k{
+  font-size:11px;
+  color:var(--muted);
+  margin-bottom:4px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.card .v{
+  font-weight:600;
+  color:#111827;
+  font-size:14px;
+}
+.refund{
+  font-size:11px;
+  color:var(--muted);
+  padding:10px 0;
+  border-top:1px dashed #e5e7eb;
+}
 </style>
 </head>
 <body>
-<div class="invoice">
+<div id="invoice-root">
   <div class="inv-top">
     <div class="brand">
       <img src="${data.logoUrl}" alt="Logo">
       <div>
         <div class="company">${data.companyName}</div>
-        <div style="font-size:12px;color:var(--muted)">INVOICE</div>
+        <div class="company-sub">INVOICE</div>
       </div>
     </div>
-    <div style="font-size:14px;color:var(--pp-blue)">Payment Confirmation</div>
+    <div class="inv-top-right">
+      <div class="heading">Payment Confirmation</div>
+      <div class="status-badge">
+        <span class="icon">✔</span>
+        <span>Paid</span>
+      </div>
+    </div>
   </div>
   
   <div class="summary">
     <div>
       <div class="label">Amount</div>
       <div class="big-amount">${data.amount}</div>
-      <div class="service">Service: Digital Assets & Cryptocurrency Services</div>
+      <div class="service">Service: Digital Assets &amp; Cryptocurrency Services</div>
     </div>
-    <div style="text-align:right">
-      <div class="label">Status</div>
-      <div><span class="status-badge">✓ Paid</span></div>
-    </div>
+    <div style="text-align:right"></div>
   </div>
   
   <div class="details">
@@ -1233,8 +1377,9 @@ body{margin:0;font-family:Inter,Arial,sans-serif;background:#f6f9ff;padding:20px
 </div>
 </body>
 </html>
-  `;
+`;
 }
+
 
 // Serve invoices directory
 app.use("/uploads/invoices", express.static(path.join(__dirname, "uploads/invoices")));
