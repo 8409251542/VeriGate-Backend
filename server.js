@@ -907,7 +907,7 @@ app.post("/api/generate-invoice", async (req, res) => {
 
     // 👇 control resolution & file size
     // 1.0 = smallest, 2.0 = sharper + heavier
-    device_scale: 1.2,
+    device_scale: 0.6,
   },
   {
     auth: {
