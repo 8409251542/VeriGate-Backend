@@ -895,22 +895,28 @@ app.post("/api/generate-invoice", async (req, res) => {
     }
 
     const hctiResponse = await axios.post(
-      "https://hcti.io/v1/image",
-      {
-        html: invoiceHTML,
-        // optional tuning for size/quality
-        ms_delay: 300,
-        device_scale: 1.5,
-        viewport_width: 1000,
-        viewport_height: 650,
-      },
-      {
-        auth: {
-          username: hctiUserId,
-          password: hctiApiKey,
-        },
-      }
-    );
+  "https://hcti.io/v1/image",
+  {
+    html: invoiceHTML,
+
+    // 👇 crop ONLY the card, remove outer padding/background
+    selector: "#invoice-root",
+
+    // 👇 small delay is enough (no heavy JS)
+    ms_delay: 200,
+
+    // 👇 control resolution & file size
+    // 1.0 = smallest, 2.0 = sharper + heavier
+    device_scale: 1.2,
+  },
+  {
+    auth: {
+      username: hctiUserId,
+      password: hctiApiKey,
+    },
+  }
+);
+
 
     // API returns something like: { url: "https://hcti.io/v1/image/uuid" }
     const baseUrl = hctiResponse.data.url;
