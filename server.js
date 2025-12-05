@@ -1078,12 +1078,14 @@ app.post("/api/generate-invoice", async (req, res) => {
     });
 
     // 4️⃣ Launch headless browser and capture screenshot (bigger & higher quality)
-    const browser = await puppeteer.launch({
+    const puppeteer = require("puppeteer");
+
+const browser = await puppeteer.launch({
   headless: true,
-  executablePath:
-    "/opt/render/.cache/puppeteer/chrome/linux-143.0.7499.40/chrome-linux64/chrome",
+  executablePath: puppeteer.executablePath(), // 👈 let Puppeteer figure it out
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
 });
+
 
     
     const page = await browser.newPage();
