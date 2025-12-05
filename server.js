@@ -814,202 +814,173 @@ function formatDate(dateStr) {
   return day + month;
 }
 
-app.post("/api/generate-report", upload.single("file"), async (req, res) => {
+app.post("/api/generate-invoice", async (req, res) => {
   try {
-    const { userId, reportDate } = req.body;
-    const filePath = req.file.path;
+    const {
+      userId,
+      companyName,
+      phoneNumber,
+      supportPhone,
+      date,
+      amount,        // can be "189.25", "$189.25", "189.25 USDT"
+      transactionId,
+      invoiceNumber,
+      logoUrl,
+    } = req.body;
 
-    if (!reportDate) {
-      return res.status(400).json({ message: "Report date required" });
-    }
-
-   // 🟢 new code: USDT cost (1 per report)
-const reportCost = 1;
-
-const { data: userData, error: userError } = await supabase
-  .from("user_limits")
-  .select("usdt_balance")
-  .eq("id", userId)
-  .maybeSingle();
-
-if (userError || !userData) {
-  return res.status(404).json({ message: "User not found" });
-}
-
-if (userData.usdt_balance < reportCost) {
-  return res.status(403).json({ message: "Not enough USDT. Requires 1 USDT." });
-}
-
-// Deduct 1 USDT
-await supabase
-  .from("user_limits")
-  .update({ usdt_balance: userData.usdt_balance - reportCost })
-  .eq("id", userId);
-
-
-    const dateStr = formatDate(reportDate);
-    if (!dateStr) {
-      return res.status(400).json({ message: "Invalid date" });
-    }
-
-    // 2️⃣ Generate report (existing logic)
-    const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
-
-    const callerIdx = headers.findIndex(h => h && h.toString().toLowerCase().includes("caller"));
-    const fwdIdx = headers.findIndex(h => h && h.toString().toLowerCase().includes("forward"));
-    const buyerIdx = headers.findIndex(h => h && h.toString().toLowerCase().includes("buyer"));
-
-    if (callerIdx === -1 || buyerIdx === -1 || fwdIdx === -1) {
-      return res.status(400).json({ message: "Required columns missing (CallerID, BuyerName, ForwardedNumber)" });
-    }
-
-    const buyers = {};
-    dataRows.forEach(row => {
-      const buyer = row[buyerIdx];
-      if (!buyer) return;
-      if (!buyers[buyer]) buyers[buyer] = [];
-      buyers[buyer].push(row);
+    console.log("📝 Invoice generation request:", {
+      userId,
+      companyName,
+      amount,
     });
 
-    const zip = new JSZip();
-    const masterSummary = [];
+    // 🔹 Basic validation
+    if (!userId || !companyName || !phoneNumber || amount == null) {
+      return res.status(400).json({
+        message:
+          "Missing required fields: userId, companyName, phoneNumber, amount",
+      });
+    }
 
-   function excelSerialToJSDate(serial) {
-  const utc_days = Math.floor(serial - 25569);
-  const utc_value = utc_days * 86400;
-  const date_info = new Date(utc_value * 1000);
-  const fractional_day = serial - Math.floor(serial) + 0.0000001;
-  let total_seconds = Math.floor(86400 * fractional_day);
-  const seconds = total_seconds % 60;
-  total_seconds -= seconds;
-  const hours = Math.floor(total_seconds / (60 * 60));
-  const minutes = Math.floor(total_seconds / 60) % 60;
-  date_info.setHours(hours, minutes, seconds);
-  return date_info;
-}
+    // 1️⃣ Check user USDT balance
+    const invoiceCost = 2;
+    const { data: userData, error: userError } = await supabase
+      .from("user_limits")
+      .select("usdt_balance")
+      .eq("id", userId)
+      .maybeSingle();
 
-function formatDT(dt) {
-  const d = dt.getDate().toString().padStart(2, '0');
-  const m = (dt.getMonth() + 1).toString().padStart(2, '0');
-  const y = dt.getFullYear();
-  const hh = dt.getHours().toString().padStart(2, '0');
-  const mm = dt.getMinutes().toString().padStart(2, '0');
-  const ss = dt.getSeconds().toString().padStart(2, '0');
-  return `${d}/${m}/${y} ${hh}:${mm}:${ss}`;
-}
+    if (userError || !userData) {
+      console.error("❌ User fetch error:", userError);
+      return res.status(404).json({ message: "User not found" });
+    }
 
-const campIdx = headers.findIndex(h => h && h.toString().toLowerCase().includes("camp"));
-const dateCols = headers
-  .map((h, i) => (h && h.toString().toLowerCase().includes("call_start") ? i : -1))
-  .filter(i => i >= 0);
+    if (userData.usdt_balance < invoiceCost) {
+      return res.status(403).json({
+        message: `Insufficient USDT balance. Required: ${invoiceCost} USDT`,
+      });
+    }
 
-for (const buyer in buyers) {
-  let calls = buyers[buyer];
+    // 2️⃣ Parse & format amount nicely
+    const rawAmount = amount;
+    const numericAmount = parseFloat(String(rawAmount).replace(/[^\d.]/g, ""));
+    const amountNumber = isNaN(numericAmount) ? 0 : numericAmount;
+    const amountDisplay = `$${amountNumber.toFixed(2)}`; // "$189.25"
 
-  // Remove duplicates by caller
-  const seen = new Set();
-  calls = calls.filter(row => {
-    const caller = row[callerIdx];
-    if (seen.has(caller)) return false;
-    seen.add(caller);
-    return true;
-  });
+    // 3️⃣ Build HTML for invoice (use your existing function + styling)
+    const invoiceHTML = generateInvoiceHTML({
+      companyName: companyName || "PAY PAL",
+      phoneNumber: phoneNumber || "+1 858 426 0634",
+      supportPhone: supportPhone || "+1 800 123 4567",
+      date: date || new Date().toISOString().split("T")[0],
+      amount: amountDisplay,
+      transactionId:
+        transactionId ||
+        `TRX-${Math.floor(100000000 + Math.random() * 900000000)}`,
+      invoiceNumber: invoiceNumber || generateRandomInvoice(),
+      logoUrl:
+        logoUrl ||
+        "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg",
+    });
 
-  // Convert call_start columns
-  calls = calls.map(row => {
-    for (const dc of dateCols) {
-      const v = row[dc];
-      if (v !== null && v !== undefined && v !== "") {
-        if (!isNaN(Number(v)) && Number(v) > 30000) {
-          const dt = excelSerialToJSDate(Number(v));
-          row[dc] = formatDT(dt);
-        } else {
-          const dtStr = new Date(v);
-          if (!isNaN(dtStr.getTime())) {
-            row[dc] = formatDT(dtStr);
-          }
-        }
+    // 4️⃣ Call HTML→Image API to get JPG URL (NO Puppeteer)
+    const hctiUserId = process.env.HCTI_USER_ID;
+    const hctiApiKey = process.env.HCTI_API_KEY;
+
+    if (!hctiUserId || !hctiApiKey) {
+      console.error("❌ HCTI credentials missing in .env");
+      return res
+        .status(500)
+        .json({ message: "Image service is not configured" });
+    }
+
+    const hctiResponse = await axios.post(
+      "https://hcti.io/v1/image",
+      {
+        html: invoiceHTML,
+        // optional tuning for size/quality
+        ms_delay: 300,
+        device_scale: 1.5,
+        viewport_width: 1000,
+        viewport_height: 650,
+      },
+      {
+        auth: {
+          username: hctiUserId,
+          password: hctiApiKey,
+        },
       }
-    }
-    return row;
-  });
+    );
 
-  const uniqueCalls = calls.length;
-  const sampleFwd = calls.length ? String(calls[0][fwdIdx]) : "";
-  const suffix = sampleFwd.slice(-4);
-  const prefix = buyer.split(" ")[0];
+    // API returns something like: { url: "https://hcti.io/v1/image/uuid" }
+    const baseUrl = hctiResponse.data.url;
+    // force JPG – just add .jpg as per docs
+    const jpgUrl = baseUrl.endsWith(".jpg") ? baseUrl : `${baseUrl}.jpg`;
 
-  let camp = calls.length && campIdx >= 0 ? String(calls[0][campIdx]) : "";
-  if (camp.length > 10) {
-    camp = camp.split(" ").map(w => w.slice(0, 3)).join("");
-  }
+    // 5️⃣ Download the JPG so we can store in Supabase
+    const imageResp = await axios.get(jpgUrl, { responseType: "arraybuffer" });
+    const imageBuffer = Buffer.from(imageResp.data);
 
-  const fileName = `${prefix} ${dateStr} ${suffix} - (${uniqueCalls}) ${camp}.xlsx`;
+    // 6️⃣ Upload invoice JPG to Supabase Storage
+    const fileName = `invoice_${Date.now()}_${userId}.jpg`;
 
-  const sheetData = [headers, ...calls];
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Calls");
+    const { error: storageError } = await supabase.storage
+      .from("Invoice") // your bucket name
+      .upload(fileName, imageBuffer, {
+        contentType: "image/jpeg",
+        upsert: true,
+      });
 
-  const wbout = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  zip.file(fileName, wbout);
-
-  masterSummary.push({ buyer, uniqueCalls, fileName });
-}
-
-
-    const summarySheet = [["Buyer Name", "Unique Calls", "File Name"]];
-    masterSummary.forEach(s => summarySheet.push([s.buyer, s.uniqueCalls, s.fileName]));
-    const totalCalls = masterSummary.reduce((a, b) => a + b.uniqueCalls, 0);
-    summarySheet.push(["TOTAL", totalCalls, ""]);
-
-    const wsSummary = XLSX.utils.aoa_to_sheet(summarySheet);
-    const wbSummary = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wbSummary, wsSummary, "Summary");
-    const summaryOut = XLSX.write(wbSummary, { type: "buffer", bookType: "xlsx" });
-    zip.file("Master_Report.xlsx", summaryOut);
-
-    const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-
-    // 3️⃣ Save ZIP permanently
-    const reportsDir = path.join(__dirname, "uploads/reports");
-    if (!fs.existsSync(reportsDir)) {
-      fs.mkdirSync(reportsDir, { recursive: true });
+    if (storageError) {
+      console.error("❌ Supabase invoice upload error:", storageError);
+      return res
+        .status(500)
+        .json({ message: "Failed to upload invoice image" });
     }
 
-    const fileName = `buyer_reports_${Date.now()}.zip`;
-    const outputPath = path.join(reportsDir, fileName);
-    fs.writeFileSync(outputPath, zipBuffer);
+    const { data: publicData } = supabase.storage
+      .from("Invoice")
+      .getPublicUrl(fileName);
 
-    // 4️⃣ Save metadata in DB (optional, for history)
-    await supabase.from("report_history").insert([
+    const downloadUrl = publicData.publicUrl;
+
+    // 7️⃣ Deduct USDT
+    const newBalance = userData.usdt_balance - invoiceCost;
+
+    await supabase
+      .from("user_limits")
+      .update({ usdt_balance: newBalance })
+      .eq("id", userId);
+
+    // 8️⃣ Save invoice history
+    await supabase.from("invoice_history").insert([
       {
         user_id: userId,
-        file_name: fileName,
-        file_path: `/uploads/reports/${fileName}`,
-        // 🟢 new code
-        usdt_used: reportCost,
+        company_name: companyName,
+        amount: amountNumber,
+        file_path: downloadUrl, // Supabase URL
+        usdt_used: invoiceCost,
         created_at: new Date(),
       },
     ]);
 
-    // 5️⃣ Respond with file link instead of deleting
+    // 9️⃣ Respond
     res.json({
-      message: "✅ Report generated successfully",
-      downloadUrl: `http://localhost:5000/uploads/reports/${fileName}`,
-      tokens_used: 2000,
+      message: "✅ Invoice generated successfully",
+      downloadUrl, // JPG served from your Supabase bucket
+      amount: amountDisplay,
+      usdt_used: invoiceCost,
+      remaining_balance: newBalance,
     });
   } catch (err) {
-    console.error("❌ Report generation failed:", err);
-    res.status(500).json({ message: "Report generation failed", error: err.message });
+    console.error("❌ Invoice generation failed:", err);
+    res.status(500).json({
+      message: "Invoice generation failed",
+      error: err.message,
+    });
   }
 });
+
 
 // Add this to your server.js file
 
