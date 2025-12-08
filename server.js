@@ -785,15 +785,20 @@ app.get("/user-history", async (req, res) => {
   if (!userId) return res.status(400).json({ message: "userId is required" });
 
   try {
-    // Fetch verification history including file_path
+    // Calculate timestamp for last 3 hours
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+
+    // Fetch only last 3 hours history
     const { data, error } = await supabase
       .from("verification_history")
       .select("*")
       .eq("user_id", userId)
+      .gte("created_at", threeHoursAgo)  // 👈 only last 3 hours
       .order("created_at", { ascending: false });
+
     if (error) return res.status(500).json({ message: error.message });
 
-    // Directly use file_path as downloadUrl
+    // Directly return saved file_path as downloadUrl
     const results = data.map(item => ({
       ...item,
       downloadUrl: item.file_path || null,
@@ -805,6 +810,7 @@ app.get("/user-history", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 function formatDate(dateStr) {
   const d = new Date(dateStr);
@@ -984,6 +990,57 @@ app.post("/api/generate-invoice", async (req, res) => {
       message: "Invoice generation failed",
       error: err.message,
     });
+  }
+});
+
+// Change password for a normal user
+app.post("/change-password", async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body;
+
+    if (!email || !currentPassword || !newPassword) {
+      return res.status(400).json({
+        message: "email, currentPassword and newPassword are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters" });
+    }
+
+    // 1️⃣ Re-authenticate user with current password
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      });
+
+    if (signInError || !signInData?.user) {
+      console.error("❌ Change password: invalid current password", signInError);
+      return res
+        .status(401)
+        .json({ message: "Current password is incorrect" });
+    }
+
+    const userId = signInData.user.id;
+
+    // 2️⃣ Update password using admin API (backend has service_role key)
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
+      userId,
+      { password: newPassword }
+    );
+
+    if (updateError) {
+      console.error("❌ Change password: update error", updateError);
+      return res.status(500).json({ message: updateError.message });
+    }
+
+    res.json({ message: "✅ Password changed successfully" });
+  } catch (err) {
+    console.error("🔥 /change-password error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
