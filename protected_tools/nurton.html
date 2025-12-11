@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Norton Order Receipt (with Demo & Watermark)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --norton-yellow:#ffd400;
+  --norton-black:#111111;
+  --muted:#6b7280;
+  --card-bg:#ffffff;
+  --page-bg:linear-gradient(180deg,#fffdfa 0%, #fffdf6 100%);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--page-bg);-webkit-font-smoothing:antialiased}
+.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+.panel{width:100%;max-width:960px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+.form{background:var(--card-bg);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(3,10,29,0.06);border:1px solid rgba(0,0,0,0.04)}
+.form h3{margin:0 0 12px 0;color:var(--norton-black);font-weight:700}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.field input[type="text"]{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px}
+.btn{width:100%;background:var(--norton-black);color:var(--norton-yellow);padding:10px;border-radius:8px;border:0;font-weight:700;cursor:pointer;margin-top:8px}
+.small{font-size:12px;color:var(--muted);margin-top:6px}
+.add-item-btn{width:100%;background:var(--norton-yellow);color:var(--norton-black);padding:8px;border-radius:8px;border:0;cursor:pointer;font-weight:700;margin-top:6px}
+
+/* Receipt */
+.invoice{background:linear-gradient(180deg,#ffffff 0%, #fffeef 100%);border-radius:12px;padding:18px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 8px 26px rgba(2,6,23,0.06);display:flex;flex-direction:column;gap:12px;max-width:100%;position:relative;overflow:hidden}
+.watermark{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%) rotate(-18deg);font-size:72px;font-weight:900;color:rgba(17,17,17,0.08);pointer-events:none;white-space:nowrap;z-index:2;display:none}
+.inv-top{display:flex;align-items:center;justify-content:space-between;z-index:3}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:44px;width:44px;border-radius:6px;background:var(--norton-yellow);padding:6px;object-fit:contain}
+.company{font-weight:800;color:var(--norton-black);font-size:18px}
+.inv-action{font-weight:700;color:var(--norton-black);font-size:14px;background:rgba(0,0,0,0.06);padding:6px 12px;border-radius:8px;white-space:nowrap}
+.summary{display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:10px;background:linear-gradient(90deg, rgba(255,212,0,0.07), rgba(17,17,17,0.03));border:1px solid rgba(17,17,17,0.06);z-index:3}
+.label{font-size:13px;color:var(--muted);margin-bottom:4px}
+.big-amount{font-size:20px;font-weight:800;color:var(--norton-black)}
+.service{font-size:12px;color:var(--muted)}
+.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:6px}
+.card{background:transparent;padding:6px;border-radius:8px}
+.k{font-size:12px;color:var(--muted);margin-bottom:6px}
+.v{font-weight:700;color:#111}
+.status-badge{display:inline-block;padding:6px 10px;border-radius:999px;background:var(--norton-yellow);color:var(--norton-black);font-weight:800;font-size:13px}
+.refund{font-size:12px;color:var(--muted);padding:8px 0 0;border-top:1px dashed rgba(0,0,0,0.06);margin-top:6px;line-height:1.5}
+.footer{font-size:12px;color:var(--muted);text-align:right;padding-top:6px}
+.download-row{display:flex;gap:8px;margin-top:8px}
+.small-btn{padding:8px 10px;border-radius:8px;border:0;cursor:pointer;font-weight:700}
+.web{background:var(--norton-yellow);color:var(--norton-black)}
+.jpg{background:var(--norton-black);color:var(--norton-yellow)}
+.png{background:#333;color:var(--norton-yellow)}
+@media(max-width:880px){.panel{grid-template-columns:1fr;max-width:520px}}
+.status-line{font-size:12px;color:#555;margin-top:8px}
+.table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+.table th, .table td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+.table th{background:#fffefb;color:#555;font-weight:700}
+.table td:last-child{text-align:right}
+.remove-btn{background:none;border:0;color:#ef4444;cursor:pointer;font-size:13px}
+.plan-badge{display:inline-block;padding:6px 10px;border-radius:8px;background:#fff6d6;color:var(--norton-black);font-weight:800}
+.control-row{display:flex;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="form">
+      <h3>Subscription Details</h3>
+
+      <div class="field"><label>Customer Contact</label>
+        <input type="text" id="phoneInput" value="+1 555 867 5309">
+      </div>
+
+      <div class="field"><label>Support Contact</label>
+        <input type="text" id="footerPhoneInput" value="+1 800 800 1234">
+      </div>
+
+      <div class="field"><label>Order Date</label>
+        <input type="text" id="dateInput">
+      </div>
+
+      <div class="field"><label>Amount (USD)</label>
+        <input type="text" id="amountInput" value="$0.00" readonly>
+      </div>
+
+      <div class="field"><label>Order ID</label>
+        <input type="text" id="trxInput" value="NTN-2025-0001">
+      </div>
+
+      <div class="field"><label>Invoice Number</label>
+        <input type="text" id="invoiceNoInput" value="">
+      </div>
+
+      <h4 style="margin-top:14px; color:var(--norton-black);">🔒 Yearly Plans</h4>
+      <table class="table" id="productInputTable">
+        <thead>
+          <tr><th>Plan</th><th>Qty</th><th>Price (USD)</th><th></th></tr>
+        </thead>
+        <tbody id="productRows">
+          <tr>
+            <td><input type="text" value="Norton Standard — 1 Year" style="width:100%;"></td>
+            <td><input type="text" value="1" style="width:40px;"></td>
+            <td><input type="text" value="29.99" style="width:60px;"></td>
+            <td><button class="remove-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="Norton Deluxe — 1 Year (Up to 5 devices)" style="width:100%;"></td>
+            <td><input type="text" value="1" style="width:40px;"></td>
+            <td><input type="text" value="49.99" style="width:60px;"></td>
+            <td><button class="remove-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="Norton Ultimate — 1 Year (All features)" style="width:100%;"></td>
+            <td><input type="text" value="1" style="width:40px;"></td>
+            <td><input type="text" value="79.99" style="width:60px;"></td>
+            <td><button class="remove-btn">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="add-item-btn" id="addItemBtn">+ Add Plan</button>
+
+      <div style="margin-top:12px;">
+        <div class="field"><label>Watermark Text (appears on receipt)</label>
+          <input type="text" id="watermarkInput" placeholder="e.g. DEMO, SAMPLE, COPY">
+        </div>
+        <div class="control-row">
+          <button class="small-btn web" id="applyWatermarkBtn" style="padding:10px 12px;">Apply Watermark</button>
+          <button class="small-btn jpg" id="clearWatermarkBtn" style="background:#eee;color:#111;">Clear Watermark</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="control-row">
+          <button class="btn" id="generateBtn">Generate Preview</button>
+        </div>
+        <div style="margin-top:8px;" class="control-row">
+          <button class="small-btn" id="demoBtn">Show Demo Receipt</button>
+          <div class="small">Click demo to populate fake data; change watermark text before clicking Apply.</div>
+        </div>
+      </div>
+      <div class="small">Adjust plans or prices and click “Generate Preview”.</div>
+    </div>
+
+    <div>
+      <div class="invoice" id="invoice" aria-hidden="true">
+        <div class="watermark" id="watermark">DEMO</div>
+
+        <div class="inv-top">
+          <div class="brand">
+            <img src="https://media.licdn.com/dms/image/v2/D560BAQFW27sqUNVlqw/company-logo_200_200/company-logo_200_200/0/1697486263921/norton_logo?e=2147483647&v=beta&t=bxUhd21twupH4IJQksGDNi3IyHHwudpBT3Ey9onFiQY" alt="Norton Logo">
+            <div>
+              <div class="company" id="companyName">Norton Antivirus</div>
+              <div style="font-size:12px;color:var(--muted)">ANNUAL SUBSCRIPTION RECEIPT</div>
+            </div>
+          </div>
+          <div class="inv-action">Auto-Renew — Enabled</div>
+        </div>
+
+        <div class="summary">
+          <div>
+            <div class="label">Amount Charged</div>
+            <div class="big-amount" id="amountText">$0.00</div>
+            <div class="service">Thank you for choosing Norton. Your protection is active.</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="label">Status</div>
+            <div><span class="status-badge">✓ Activated</span></div>
+          </div>
+        </div>
+
+        <table class="table" id="productTable">
+          <thead>
+            <tr><th>Plan</th><th>Qty</th><th>Price</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="details">
+          <div class="card"><div class="k">Order ID</div><div class="v" id="trxText">—</div></div>
+          <div class="card"><div class="k">Order Date</div><div class="v" id="dateText">—</div></div>
+          <div class="card"><div class="k">Invoice No</div><div class="v" id="invoiceNoText">—</div></div>
+          <div class="card"><div class="k">Customer Contact</div><div class="v" id="phoneText">—</div></div>
+        </div>
+
+        <div class="refund" id="refundBlock">
+          Annual subscriptions renew automatically. To cancel auto-renew or request a refund, contact Norton Support within 30 days of purchase.
+          For assistance call <strong id="phoneFooter">+1 800 800 1234</strong>.
+        </div>
+      </div>
+
+      <div class="download-row">
+        <button class="small-btn web" id="downloadWebp">Download WebP</button>
+        <button class="small-btn jpg" id="downloadJpg">Download JPG</button>
+        <button class="small-btn png" id="downloadPng">Download PNG</button>
+      </div>
+
+      <div class="status-line" id="statusLine" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- html2canvas -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<script>
+(function(){
+  const addItemBtn = document.getElementById('addItemBtn');
+  const productRows = document.getElementById('productRows');
+  const generateBtn = document.getElementById('generateBtn');
+  const statusLine = document.getElementById('statusLine');
+  const invoiceEl = document.getElementById('invoice');
+  const watermarkEl = document.getElementById('watermark');
+  const watermarkInput = document.getElementById('watermarkInput');
+  const applyWatermarkBtn = document.getElementById('applyWatermarkBtn');
+  const clearWatermarkBtn = document.getElementById('clearWatermarkBtn');
+  const demoBtn = document.getElementById('demoBtn');
+
+  function updateTotal(){
+    let total = 0;
+    [...productRows.querySelectorAll('tr')].forEach(row=>{
+      const qty = parseFloat(row.children[1].querySelector('input').value) || 0;
+      const price = parseFloat(row.children[2].querySelector('input').value) || 0;
+      total += qty * price;
+    });
+    document.getElementById('amountInput').value = `$${total.toFixed(2)}`;
+  }
+
+  addItemBtn.addEventListener('click', ()=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `\n      <td><input type="text" value="New Plan — 1 Year" style="width:100%;"></td>\n      <td><input type="text" value="1" style="width:40px;"></td>\n      <td><input type="text" value="0.00" style="width:60px;"></td>\n      <td><button class="remove-btn">✕</button></td>`;
+    productRows.appendChild(tr);
+    updateTotal();
+  });
+
+  productRows.addEventListener('input', updateTotal);
+  productRows.addEventListener('click', e=>{
+    if(e.target.classList.contains('remove-btn')){e.target.closest('tr').remove();updateTotal();}
+  });
+
+  function defaultTimestamp(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+  document.getElementById('dateInput').value = defaultTimestamp();
+
+  function generateRandomInvoice(){const letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';const rand=n=>Array.from({length:n},()=>letters[Math.floor(Math.random()*letters.length)]).join('');return `${rand(3)}-${Math.floor(1000+Math.random()*9000)}-${rand(2)}`}
+  document.getElementById('invoiceNoInput').value = generateRandomInvoice();
+
+  generateBtn.addEventListener('click', ()=>{
+    updateTotal();
+    const phone = document.getElementById('phoneInput').value;
+    const support = document.getElementById('footerPhoneInput').value;
+    const date = document.getElementById('dateInput').value;
+    const orderId = document.getElementById('trxInput').value;
+    const invoiceNo = document.getElementById('invoiceNoInput').value;
+    const amount = document.getElementById('amountInput').value;
+
+    document.getElementById('phoneText').innerText = phone;
+    document.getElementById('phoneFooter').innerText = support;
+    document.getElementById('dateText').innerText = date;
+    document.getElementById('trxText').innerText = orderId;
+    document.getElementById('invoiceNoText').innerText = invoiceNo;
+    document.getElementById('amountText').innerText = amount;
+
+    const outputTable = document.querySelector('#productTable tbody');
+    outputTable.innerHTML = '';
+    let total = 0;
+    [...productRows.querySelectorAll('tr')].forEach(row=>{
+      const item = row.children[0].querySelector('input').value;
+      const qty = parseFloat(row.children[1].querySelector('input').value) || 0;
+      const price = parseFloat(row.children[2].querySelector('input').value) || 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${item}</td><td>${qty}</td><td>$${(qty*price).toFixed(2)}</td>`;
+      outputTable.appendChild(tr);
+      total += qty * price;
+    });
+    const totalRow = document.createElement('tr');
+    totalRow.innerHTML = `<td style="font-weight:800;">Total</td><td></td><td style="font-weight:800;">$${total.toFixed(2)}</td>`;
+    outputTable.appendChild(totalRow);
+
+    invoiceEl.setAttribute('aria-hidden','false');
+    showStatus('Preview updated.');
+  });
+
+  // Watermark logic
+  function applyWatermark(){
+    const txt = watermarkInput.value.trim();
+    if(txt){
+      watermarkEl.innerText = txt;
+      watermarkEl.style.display = 'block';
+    } else {
+      watermarkEl.style.display = 'none';
+    }
+  }
+  function clearWatermark(){watermarkInput.value=''; watermarkEl.style.display='none';}
+
+  applyWatermarkBtn.addEventListener('click', ()=>{applyWatermark(); showStatus('Watermark applied.');});
+  clearWatermarkBtn.addEventListener('click', ()=>{clearWatermark(); showStatus('Watermark cleared.');});
+
+  // Demo button fills fake data and shows watermark default
+  demoBtn.addEventListener('click', ()=>{
+    // populate fake customer and product data
+    document.getElementById('phoneInput').value = "+1 404 555 0199";
+    document.getElementById('footerPhoneInput').value = "+1 800 800 1234";
+    document.getElementById('dateInput').value = '2025-11-13';
+    document.getElementById('trxInput').value = 'NTN-FAKE-0001';
+    document.getElementById('invoiceNoInput').value = generateRandomInvoice();
+
+    // replace product rows with demo rows
+    productRows.innerHTML = '';
+    const demoProducts = [
+      ['Norton Ultimate — 1 Year (All features)', '1', '79.99'],
+      ['Norton Deluxe — 1 Year (Up to 5 devices)', '1', '49.99']
+    ];
+    demoProducts.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML = `<td><input type="text" value="${p[0]}" style="width:100%;"></td><td><input type="text" value="${p[1]}" style="width:40px;"></td><td><input type="text" value="${p[2]}" style="width:60px;"></td><td><button class="remove-btn">✕</button></td>`;productRows.appendChild(tr)});
+
+    // set watermark default if empty
+    if(!watermarkInput.value.trim()) watermarkInput.value = 'DEMO';
+    applyWatermark();
+
+    // regenerate preview
+    generateBtn.click();
+    showStatus('Demo receipt shown.');
+  });
+
+  // Image export logic (keeps small size)
+  const BYTE_LIMIT = 50 * 1024;
+  function dataURLtoBlob(dataurl){const arr=dataurl.split(',');const mime=arr[0].match(/:(.*?);/)[1];const bstr=atob(arr[1]);let n=bstr.length;const u8arr=new Uint8Array(n);while(n--){u8arr[n]=bstr.charCodeAt(n);}return new Blob([u8arr],{type:mime});}
+  const blobSize=b=>b?b.size:0;
+  function triggerDownload(blob, filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove();}
+
+  async function renderInvoiceCanvas(){return await html2canvas(invoiceEl,{backgroundColor:'#ffffff',scale:2,useCORS:true,allowTaint:false,logging:false});}
+  function scaleCanvas(sourceCanvas,targetWidth){if(targetWidth>=sourceCanvas.width) return sourceCanvas;const ratio=targetWidth/sourceCanvas.width;const targetHeight=Math.max(1,Math.round(sourceCanvas.height*ratio));const canvas=document.createElement('canvas');canvas.width=targetWidth;canvas.height=targetHeight;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(sourceCanvas,0,0,targetWidth,targetHeight);return canvas}
+
+  async function exportConstrained(format){try{showStatus('Rendering image...');const base=await renderInvoiceCanvas();let width=Math.min(900,base.width);let canvas=scaleCanvas(base,width);let quality=0.9;let blob=null;if(format==='png'){for(let i=0;i<12;i++){const dataUrl=canvas.toDataURL('image/png');blob=dataURLtoBlob(dataUrl);if(blobSize(blob)<=BYTE_LIMIT) break;width=Math.max(320,Math.round(width*0.9));canvas=scaleCanvas(base,width);}}else{const mime=(format==='webp')?'image/webp':'image/jpeg';for(let i=0;i<18;i++){const dataUrl=canvas.toDataURL(mime,quality);blob=dataURLtoBlob(dataUrl);if(blobSize(blob)<=BYTE_LIMIT) break;if(quality>0.5){quality=Math.max(0.5,+(quality-0.1).toFixed(2));}else{width=Math.max(320,Math.round(width*0.9));canvas=scaleCanvas(base,width);}}}
+
+      if(!blob){showStatus('Could not build image. Try again.', true);return;}
+
+      const finalKB=(blobSize(blob)/1024).toFixed(1);
+      if(blobSize(blob)>BYTE_LIMIT){showStatus(`Downloaded (best effort ~${finalKB} KB; over 50KB).`, true);}else{showStatus(`Ready. Size: ${finalKB} KB`);}      
+      const filename=`norton-receipt-${Date.now()}.${format==='jpg'?'jpg':format}`;
+      triggerDownload(blob, filename);
+    }catch(err){console.error(err);showStatus('Export failed. Please ensure preview is generated.', true);} }
+
+  function showStatus(msg, warn){statusLine.style.display='block';statusLine.textContent=msg;statusLine.style.color=warn?'#b45309':'#111827';}
+  async function ensurePreview(){if(document.getElementById('trxText').innerText.trim()==='—'){generateBtn.click();await new Promise(r=>setTimeout(r,20));}}
+
+  document.getElementById('downloadWebp').addEventListener('click',async ()=>{await ensurePreview();exportConstrained('webp');});
+  document.getElementById('downloadJpg').addEventListener('click',async ()=>{await ensurePreview();exportConstrained('jpg');});
+  document.getElementById('downloadPng').addEventListener('click',async ()=>{await ensurePreview();exportConstrained('png');});
+
+  document.getElementById('footerPhoneInput').addEventListener('input',(e)=>{document.getElementById('phoneFooter').innerText=e.target.value||'+1 800 800 1234';});
+
+  // initial preview
+  generateBtn.click();
+})();
+</script>
+<script>function notifyParent(){if(window.parent){window.parent.postMessage({type:'IMAGE_GENERATION_SUCCESS',cost:2},'*');}}['downloadWebp','downloadJpg','downloadPng'].forEach(id=>{const btn=document.getElementById(id);if(btn)btn.addEventListener('click',notifyParent);});</script></body>
+</html>
+

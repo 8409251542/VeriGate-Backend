@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Invoice Generator — Optimized &lt;50KB</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--pp-blue:#003087;--pp-accent:#009cde;--muted:#6b7280;--card-bg:#fff;--page-bg:linear-gradient(180deg,#f6f9ff 0%, #f4f6f9 100%);} 
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--page-bg);-webkit-font-smoothing:antialiased}
+.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;box-sizing:border-box}
+.panel{width:100%;max-width:920px;display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start}
+.form{background:var(--card-bg);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(3,10,29,0.06);border:1px solid rgba(0,0,0,0.03)}
+.form h3{margin:0 0 12px 0;color:var(--pp-blue);font-weight:700}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.field input[type="text"]{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px;box-sizing:border-box}
+.btn{width:100%;background:var(--pp-blue);color:#fff;padding:10px;border-radius:8px;border:0;font-weight:600;cursor:pointer;margin-top:8px}
+.small{font-size:12px;color:var(--muted);margin-top:6px}
+.invoice{background:linear-gradient(180deg,#ffffff 0%, #fbfdff 100%);border-radius:12px;padding:18px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 8px 26px rgba(2,6,23,0.06);display:flex;flex-direction:column;gap:12px}
+.inv-top{display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:44px;width:auto;border-radius:6px;object-fit:contain}
+.company{font-weight:700;color:var(--pp-blue);font-size:18px}
+.summary{display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:10px;background:linear-gradient(90deg, rgba(0,156,222,0.06), rgba(0,48,135,0.03));border:1px solid rgba(0,48,135,0.06)}
+.label{font-size:13px;color:var(--muted);margin-bottom:4px}
+.big-amount{font-size:20px;font-weight:700;color:#081024}
+.service{font-size:12px;color:var(--muted)}
+.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:6px}
+.card{background:transparent;padding:6px;border-radius:8px}
+.k{font-size:12px;color:var(--muted);margin-bottom:6px}
+.v{font-weight:600;color:#111}
+.status-badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#e6fff0;color:#0a9443;font-weight:700;font-size:13px}
+.refund{font-size:12px;color:var(--muted);padding:8px 0;border-top:1px dashed #e9eef6;margin-top:6px}
+.footer{font-size:12px;color:var(--muted);text-align:right;padding-top:6px}
+.download-row{display:flex;gap:8px;margin-top:8px}
+.small-btn{padding:8px 10px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+.web{background:#0ea5e9;color:#fff}
+.jpg{background:#f97316;color:#fff}
+.png{background:#10b981;color:#fff}
+@media(max-width:880px){.panel{grid-template-columns:1fr;max-width:520px}}
+.status-line{font-size:12px;color:#555;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="form">
+      <h3>Invoice Details</h3>
+
+      <div class="field">
+        <label>Contact Number (appears under "Contact" on invoice)</label>
+        <input type="text" id="phoneInput" value="+1 858 426 0634">
+      </div>
+
+      <div class="field">
+        <label>Support Phone (appears in the footer / assistance)</label>
+        <input type="text" id="footerPhoneInput" value="+1 800 123 4567">
+      </div>
+
+      <div class="field">
+        <label>Date</label>
+        <input type="text" id="dateInput">
+      </div>
+
+      <div class="field">
+        <label>Amount (USD)</label>
+        <input type="text" id="amountInput" value="$189.25">
+      </div>
+
+      <div class="field">
+        <label>Transaction ID (optional)</label>
+        <input type="text" id="trxInput" value="TRX-68572610">
+      </div>
+
+      <div class="field">
+        <label>Invoice Number (editable)</label>
+        <input type="text" id="invoiceNoInput" value="">
+        <div class="small">Prefilled with a realistic invoice ID — backspace and tweak a few letters to make it unique.</div>
+      </div>
+
+      <button class="btn" id="generateBtn">Generate Preview</button>
+      <div class="small">Tip: Click a format button to download an optimized image ≤ 50 KB. If the design is complex, it will try multiple quality/width passes.</div>
+    </div>
+
+    <div>
+      <div class="invoice" id="invoice" aria-hidden="true">
+        <div class="inv-top">
+          <div class="brand">
+            <!-- replace the src below with your logo URL -->
+            <img id="logoPreview" src="https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg" alt="Company Logo" crossOrigin="anonymous" style="display:inline-block">
+            <div>
+              <div class="company" id="companyName">PAY PAL</div>
+              <div style="font-size:12px;color:var(--muted)">INVOICE</div>
+            </div>
+          </div>
+          <div class="inv-action">Payment Confirmation</div>
+        </div>
+
+        <div class="summary">
+          <div>
+            <div class="label">Amount</div>
+            <div class="big-amount" id="amountText">$0.00</div>
+            <div class="service" id="serviceText">Service: Digital Assets &amp; Cryptocurrency Services</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="label">Status</div>
+            <div><span class="status-badge">✓ Paid</span></div>
+          </div>
+        </div>
+
+        <div class="details">
+          <div class="card">
+            <div class="k">Transaction ID</div>
+            <div class="v" id="trxText">TRX-XXXXX</div>
+          </div>
+          <div class="card">
+            <div class="k">Date</div>
+            <div class="v" id="dateText">—</div>
+          </div>
+          <div class="card">
+            <div class="k">Invoice No</div>
+            <div class="v" id="invoiceNoText">SK30Q-89CY-EO68V</div>
+          </div>
+          <div class="card">
+            <div class="k">Contact - 24/7</div>
+            <div class="v" id="phoneText">+1 000 000 0000</div>
+          </div>
+        </div>
+
+        <div class="refund"> Refund requests within <strong>12 hours</strong> of payment will be reviewed. Contact support if you notice an unrecognized charge. </div>
+        <div class="refund"> <span>This is an automated notification. For assistance call <strong id="phoneFooter">+1 800 123 4567</strong> in working hours. Both numbers are alternate — you can use any.</span> </div>
+      </div>
+
+      <div class="download-row">
+        <button class="small-btn web" id="downloadWebp">Download WebP (≤50KB)</button>
+        <button class="small-btn jpg" id="downloadJpg">Download JPG (≤50KB)</button>
+        <button class="small-btn png" id="downloadPng">Download PNG (best effort)</button>
+      </div>
+
+      <div class="status-line" id="statusLine" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- html2canvas -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+(async function(){
+  const generateBtn = document.getElementById('generateBtn');
+  const invoice = document.getElementById('invoice');
+  const statusLine = document.getElementById('statusLine');
+  const downloadWebp = document.getElementById('downloadWebp');
+  const downloadJpg = document.getElementById('downloadJpg');
+  const downloadPng = document.getElementById('downloadPng');
+  const logoPreview = document.getElementById('logoPreview');
+
+  // helper: date "YYYY-MM-DD" in UTC
+  function defaultTimestamp(){
+    const d = new Date();
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth()+1).padStart(2,'0');
+    const day = String(d.getUTCDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // random invoice generator: pattern AA12A-1234-BB
+  function generateRandomInvoice(){
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    function r(n){ let s=''; for(let i=0;i<n;i++) s+=letters[Math.floor(Math.random()*letters.length)]; return s; }
+    const digits = String(Math.floor(1000 + Math.random()*9000));
+    return `${r(2)}${Math.floor(10+Math.random()*89)}-${digits}-${r(2)}`;
+  }
+
+  // inputs
+  const phoneInput = document.getElementById('phoneInput');
+  const footerPhoneInput = document.getElementById('footerPhoneInput');
+  const dateInput = document.getElementById('dateInput');
+  const amountInput = document.getElementById('amountInput');
+  const trxInput = document.getElementById('trxInput');
+  const invoiceNoInput = document.getElementById('invoiceNoInput');
+
+  dateInput.value = defaultTimestamp();
+  if(!phoneInput.value) phoneInput.value = '+1 858 426 0634';
+  if(!footerPhoneInput.value) footerPhoneInput.value = '+1 800 123 4567';
+  if(!amountInput.value) amountInput.value = '$189.25';
+  if(!trxInput.value) trxInput.value = 'TRX-68572610';
+  invoiceNoInput.value = generateRandomInvoice();
+
+  function setValuesToPreview(){
+    const phone = phoneInput.value || '+1 000 000 0000';
+    const footerPhone = footerPhoneInput.value || '+1 800 123 4567';
+    const date = dateInput.value || defaultTimestamp();
+    const amount = amountInput.value || '$0.00';
+    const trx = trxInput.value || 'TRX-68572610';
+    const invNo = invoiceNoInput.value || generateRandomInvoice();
+
+    document.getElementById('phoneText').innerText = phone;
+    document.getElementById('phoneFooter').innerText = footerPhone;
+    document.getElementById('dateText').innerText = date;
+    document.getElementById('amountText').innerText = amount;
+    document.getElementById('trxText').innerText = trx;
+    document.getElementById('invoiceNoText').innerText = invNo;
+  }
+
+  function waitForImages(container, timeout = 2000){
+    const imgs = Array.from(container.querySelectorAll('img')).filter(img => !!img.src);
+    if (!imgs.length) return Promise.resolve();
+    const promises = imgs.map(img=>{
+      return new Promise(resolve=>{
+        if (img.complete) return resolve();
+        img.addEventListener('load', ()=>resolve());
+        img.addEventListener('error', ()=>resolve());
+      });
+    });
+    return Promise.race([Promise.all(promises), new Promise(res=>setTimeout(res, timeout))]);
+  }
+
+  function canvasToBlob(canvas, type, quality){
+    return new Promise(resolve=>{ canvas.toBlob(blob=>resolve(blob), type, quality); });
+  }
+
+  function browserSupportsWebP(){
+    try { const c = document.createElement('canvas'); return c.toDataURL('image/webp').indexOf('data:image/webp') === 0; } catch (e) { return false; }
+  }
+
+  async function exportOptimizedImage(node, opts = {}){ 
+    const {
+      preferFormat = 'image/webp',
+      forceExactFormat = false,
+      maxSize = 50000,
+      initialWidth = 840,
+      minWidth = 360,
+      qualitySteps = [0.9,0.85,0.8,0.75,0.7,0.65,0.6,0.55,0.5,0.45,0.4,0.35,0.3],
+      scaleForRender = 2
+    } = opts;
+
+    let formatCandidates = [];
+    const webpOk = browserSupportsWebP();
+
+    if (forceExactFormat && preferFormat){
+      formatCandidates = [preferFormat];
+    } else {
+      if(preferFormat){
+        if(preferFormat === 'image/webp' && webpOk) formatCandidates.push('image/webp');
+        else if(preferFormat === 'image/jpeg') formatCandidates.push('image/jpeg');
+        else if(preferFormat === 'image/png') formatCandidates.push('image/png');
+      }
+      if(webpOk && !formatCandidates.includes('image/webp')) formatCandidates.push('image/webp');
+      if(!formatCandidates.includes('image/jpeg')) formatCandidates.push('image/jpeg');
+      if(!formatCandidates.includes('image/png')) formatCandidates.push('image/png');
+    }
+
+    async function renderToCanvas(targetWidth){
+      const rect = node.getBoundingClientRect();
+      const ratio = targetWidth / rect.width;
+      const renderScale = scaleForRender * ratio;
+      return html2canvas(node, { scale: renderScale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff' });
+    }
+
+    let lastError = null;
+    let currentWidth = initialWidth;
+
+    for(const fmt of formatCandidates){
+      currentWidth = initialWidth;
+      for(let widthAttempt=0; widthAttempt<6 && currentWidth>=minWidth; widthAttempt++){
+        let canvas;
+        try{ canvas = await renderToCanvas(currentWidth); } catch(err){ lastError = err; break; }
+
+        const targetCanvas = document.createElement('canvas');
+        const ctx = targetCanvas.getContext('2d');
+        const ratio = currentWidth / canvas.width;
+        targetCanvas.width = currentWidth;
+        targetCanvas.height = Math.round(canvas.height * ratio);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,targetCanvas.width,targetCanvas.height);
+        ctx.drawImage(canvas, 0, 0, targetCanvas.width, targetCanvas.height);
+
+        for(const q of qualitySteps){
+          try{
+            const blob = await canvasToBlob(targetCanvas, fmt, q);
+            if(!blob) continue;
+            if(blob.size <= maxSize) return { blob, format: fmt, quality: q, width: currentWidth, size: blob.size };
+          }catch(err){ lastError = err; }
+        }
+        currentWidth = Math.floor(currentWidth * 0.85);
+      }
+    }
+
+    const finalFormat = (forceExactFormat && preferFormat) ? preferFormat : (formatCandidates[0] || 'image/jpeg');
+    const finalWidth = Math.max(minWidth, Math.floor(initialWidth * 0.5));
+    const finalCanvas = await renderToCanvas(finalWidth);
+    const fc = document.createElement('canvas');
+    const fctx = fc.getContext('2d');
+    const ratioF = finalWidth / finalCanvas.width;
+    fc.width = finalWidth;
+    fc.height = Math.round(finalCanvas.height * ratioF);
+    fctx.fillStyle = '#ffffff'; fctx.fillRect(0,0,fc.width,fc.height);
+    fctx.drawImage(finalCanvas, 0, 0, fc.width,fc.height);
+    const finalBlob = await canvasToBlob(fc, finalFormat, 0.3);
+    return { blob: finalBlob, format: finalFormat, quality: 0.3, width: finalWidth, size: finalBlob ? finalBlob.size : 0, lastError };
+  }
+
+  // generate preview
+  generateBtn.addEventListener('click', async ()=>{
+    setValuesToPreview();
+    invoice.style.display = 'flex';
+    invoice.setAttribute('aria-hidden','false');
+    await waitForImages(invoice, 2000);
+    statusLine.style.display = 'none';
+  });
+
+  async function doDownload(preferredMime, options = {}){
+    try{
+      setValuesToPreview();
+      invoice.style.display = 'flex';
+      statusLine.style.display = 'block';
+      const trying = preferredMime === 'image/png' ? 'PNG (best effort)' : preferredMime;
+      statusLine.innerText = `Preparing image — optimizing to be ≤ 50 KB (trying ${trying})...`;
+      await waitForImages(invoice, 2000);
+
+      const result = await exportOptimizedImage(invoice, Object.assign({
+        preferFormat: preferredMime,
+        maxSize: 50000,
+        initialWidth: 840,
+        minWidth: 360,
+        forceExactFormat: preferredMime === 'image/png' // force PNG
+      }, options));
+
+      if(!result || !result.blob) throw new Error('Failed to generate image');
+      const ext = (result.format || 'image/jpeg').split('/')[1] || 'jpg';
+      const fileExt = ext === 'jpeg' ? 'jpg' : ext;
+      const filename = `invoice.${fileExt}`;
+
+      const sizeText = result.size ? `${Math.round(result.size/1024)} KB` : 'unknown';
+      statusLine.innerText = `Format: ${result.format} — size ${sizeText} — width ${result.width}px — quality ${result.quality}`;
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(result.blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }catch(err){
+      console.error(err);
+      statusLine.innerText = 'Failed to optimize image. Check console for details.';
+    }
+  }
+
+  downloadWebp.addEventListener('click', ()=> doDownload('image/webp'));
+  downloadJpg.addEventListener('click', ()=> doDownload('image/jpeg'));
+  downloadPng.addEventListener('click', ()=> doDownload('image/png'));
+
+  // initial preview values
+  setValuesToPreview();
+})();
+</script>
+<script>function notifyParent(){if(window.parent){window.parent.postMessage({type:'IMAGE_GENERATION_SUCCESS',cost:2},'*');}}['downloadWebp','downloadJpg','downloadPng'].forEach(id=>{const btn=document.getElementById(id);if(btn)btn.addEventListener('click',notifyParent);});</script></body>
+</html>
+

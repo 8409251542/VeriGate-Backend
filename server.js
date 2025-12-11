@@ -1855,6 +1855,119 @@ async function buildZipFromRows(rows, dateStr) {
 
 
 
+
+// Deduct balance for Image Generation
+app.post("/api/deduct-image-cost", async (req, res) => {
+  try {
+    const { userId, cost } = req.body;
+    const amount = cost || 2; // Default 2 USDT
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    // 1️⃣ Get current balance
+    const { data: userData, error: userError } = await supabase
+      .from("user_limits")
+      .select("usdt_balance")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (userData.usdt_balance < amount) {
+      return res.status(403).json({ message: "Insufficient USDT balance" });
+    }
+
+    // 2️⃣ Deduct balance
+    const newBalance = userData.usdt_balance - amount;
+    const { error: updateError } = await supabase
+      .from("user_limits")
+      .update({ usdt_balance: newBalance })
+      .eq("id", userId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // 3️⃣ Log transaction (optional, using purchases table or new usage table)
+    // For now we just deduct. You can add specific logging if needed.
+
+    res.json({
+      message: "Balance deducted",
+      deducted: amount,
+      newBalance: newBalance
+    });
+
+  } catch (err) {
+    console.error("🔥 /deduct-image-cost error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
+
+// Secure Tool Serving
+app.get("/api/tools/:toolName", async (req, res) => {
+  try {
+    const toolName = req.params.toolName;
+    const toolsDir = path.join(__dirname, "protected_tools");
+    const filePath = path.join(toolsDir, toolName);
+
+    // Security: Prevent directory traversal
+    if (!filePath.startsWith(toolsDir)) {
+      return res.status(403).send("Access denied");
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("Tool not found");
+    }
+
+    // Optional: Add authentication check here if needed
+    // const userId = req.query.userId;
+    // checkUser(userId)...
+
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error("Tool serving error:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+
+
+// Get User Details (Balance)
+app.post("/get-user-details", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: "userId required" });
+
+    const { data: userData, error } = await supabase
+      .from("user_limits")
+      .select("usdt_balance")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!userData) return res.status(404).json({ message: "User not found" });
+
+    // Try to get last recharge (optional, strictly for dashboard parity if needed)
+    // For ImageTools, only usdt_balance is critical.
+
+    res.json({
+      usdt_balance: userData.usdt_balance,
+      // Mocking last_recharge if not querying it, to prevent frontend crash if it expects it
+      last_recharge: null
+    });
+  } catch (err) {
+    console.error("Error fetching user details:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on http://localhost:${PORT}`)

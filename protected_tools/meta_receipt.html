@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Meta-style Receipt — Clean Landscape (v2 + JPG ≤50KB)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f5f7fb;--card:#ffffff;--muted:#6b7280;--accent:#1877f2;
+  --border:#e9edf2;--radius:10px;--pad:16px;--shadow: 0 12px 30px rgba(12,30,60,0.06);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Arial;background:var(--bg);padding:24px;color:#0b1220}
+.container{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+.panel{background:var(--card);border-radius:var(--radius);padding:14px;border:1px solid var(--border);box-shadow:var(--shadow)}
+
+/* Controls (left) */
+.controls h3{margin:0 0 12px 0;font-size:15px}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.input{width:100%;padding:10px;border-radius:8px;border:1px solid #eef2f7;font-size:14px}
+.row{display:flex;gap:8px}
+.btn{width:100%;padding:10px;border-radius:8px;border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+.small{flex:1;padding:9px;border-radius:8px;border:1px solid #e6eefb;background:#fff;cursor:pointer;font-weight:700}
+
+/* Receipt (right) — clean landscape */
+.preview{display:flex;justify-content:center;align-items:flex-start}
+.receipt{
+  width:100%;min-width:960px;aspect-ratio:16/9;background:var(--card);border-radius:10px;padding:20px;border:1px solid var(--border);
+  box-shadow:0 18px 40px rgba(10,20,40,0.06);display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden;
+}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.left-head{display:flex;gap:12px;align-items:center}
+.logo{width:56px;height:56px;border-radius:8px;background:#f3f7ff;display:flex;align-items:center;justify-content:center;border:1px solid rgba(24,119,242,0.06)}
+.logo img{width:36px}
+.title{font-weight:700;font-size:16px}
+.subtitle{font-size:13px;color:var(--muted);margin-top:4px}
+.amount-box{text-align:right;min-width:160px}
+.amount-box .label{font-size:12px;color:var(--muted)}
+.amount-box .amount{font-size:28px;font-weight:900;color:var(--accent);margin-top:6px}
+.main{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:18px;flex:1;align-items:start}
+.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.info{background:#fafbff;border-radius:8px;padding:10px;border:1px solid #f3f6fb}
+.info .lbl{font-size:12px;color:var(--muted)}
+.info .val{font-weight:700;margin-top:6px}
+.table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+.table th,.table td{padding:10px;border-bottom:1px solid #f3f6fa;text-align:left}
+.table th{font-size:13px;color:var(--muted);font-weight:700}
+.table td.right{text-align:right}
+.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#f3f9ff;border:1px solid rgba(24,119,242,0.06);color:var(--accent);font-weight:700;font-size:12px}
+.summary{background:#fff;border-radius:8px;padding:12px;border:1px solid #f3f6fb;display:flex;flex-direction:column;gap:10px}
+.summary .inv{font-weight:800}
+.row-kv{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.actions{display:flex;gap:10px;margin-top:8px}
+.action-btn{flex:1;padding:10px;border-radius:8px;border:1px solid #e6eefb;background:#f7fbff;color:var(--accent);font-weight:800;cursor:pointer}
+.link-btn{padding:10px;border-radius:8px;border:1px solid #eef2f7;background:#fff;cursor:pointer;font-weight:700}
+.foot{display:flex;flex-direction:column;gap:8px;color:var(--muted);font-size:13px;margin-top:auto;padding-top:8px;border-top:1px solid #f6f9fc}
+.foot .disclaimer{font-size:12px;color:#5b616a}
+.foot .cc{font-weight:800;color:var(--accent)}
+.wm{pointer-events:none;user-select:none;mix-blend-mode:multiply;position:absolute}
+@media(max-width:980px){.container{grid-template-columns:1fr;padding:10px}.receipt{min-width:auto;aspect-ratio:auto;padding:14px}.main{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- controls -->
+  <div class="panel controls">
+    <h3>Quick fields</h3>
+
+    <div class="field"><label>Business</label><input id="bizInput" class="input" type="text" value="META ADS  -  鲁瓦 Academy"></div>
+
+    <div class="field"><label>Transaction / Ref</label><input id="trxInput" class="input" type="text" value="473378653283"></div>
+
+    <div class="field">
+      <label>Date</label>
+      <div style="display:flex;gap:8px">
+        <input id="dateInput" class="input" type="text" value="" />
+        <button id="todayBtn" class="small">Today</button>
+      </div>
+    </div>
+
+    <div class="field"><label>Total amount</label><input id="amountInput" class="input" type="text" value="$218.71"></div>
+
+    <div style="margin-top:8px"><button id="updateBtn" class="btn">Update</button></div>
+
+    <div style="margin-top:10px" class="row">
+      <button id="demoBtn" class="small">Load demo</button>
+      <button id="watermarkBtn" class="small">Apply WM</button>
+    </div>
+
+    <div class="field" style="margin-top:10px"><label>Watermark text</label><input id="watermarkInput" class="input" type="text" placeholder="DEMO"></div>
+    <div style="margin-top:8px" class="row">
+      <button id="clearWatermarkBtn" class="small">Clear WM</button>
+      <button id="downloadPng" class="small">Download PNG</button>
+    </div>
+
+    <div style="margin-top:8px" class="row">
+      <button id="downloadJpgSmall" class="small">Download JPG (≤50 KB)</button>
+      <button id="downloadJpgPreview" class="small">Download JPG (preview)</button>
+    </div>
+
+    <hr style="margin:12px 0;border-top:1px solid #f3f7fb">
+
+    <div class="field"><label>Campaign</label><input id="campInput" class="input" type="text" value=" CPC | Budget | 鲁瓦 Academy"></div>
+    <div class="field"><label>Results</label><input id="resultsInput" class="input" type="text" value="22098 Impressions"></div>
+    <div class="field"><label>Campaign amount</label><input id="campAmtInput" class="input" type="text" value="$218.71"></div>
+
+    <hr style="margin:12px 0;border-top:1px solid #f3f7fb">
+
+    <!-- Customer care update -->
+    <div class="field"><label>Customer care number</label><input id="ccInput" class="input" type="text" placeholder="+1-800-000-0000"></div>
+    <div style="display:flex;gap:8px">
+      <button id="updateCCBtn" class="small">Update CC</button>
+      <button id="resetCCBtn" class="small">Reset CC</button>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted)">Click <strong>Update CC</strong> to change the customer care number shown on the receipt footer and the receipt button.</div>
+  </div>
+
+  <!-- preview -->
+  <div class="preview">
+    <div class="receipt" id="receipt">
+      <!-- header -->
+      <div class="header">
+        <div class="left-head">
+          <div class="logo"><img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Meta_Platforms_Inc._logo_%28cropped%29.svg" alt="Meta"></div>
+          <div>
+            <div class="title" id="bizText">REWW Academy (1413021655492465)</div>
+            <div class="subtitle">Transaction <span id="trxText">8551719048276003-8699907410123833</span></div>
+          </div>
+        </div>
+        <div class="amount-box">
+          <div class="label">Total billed</div>
+          <div class="amount" id="amountText">$8.71</div>
+        </div>
+      </div>
+
+      <!-- main content -->
+      <div class="main">
+        <div>
+          <div class="info-grid">
+            <div class="info"><div class="lbl">Amount billed</div><div class="val" id="amountB">$8.71</div></div>
+            <div class="info"><div class="lbl">Billing reason</div><div class="val" id="reasonB">Ad costs since your last bill.</div></div>
+            <div class="info"><div class="lbl">Product type</div><div class="val" id="productB">Meta ads</div></div>
+            <div class="info"><div class="lbl">Payment method</div><div class="val" id="payB">Advertising credit</div></div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-weight:700">Campaign breakdown</div>
+              <div style="font-size:13px;color:var(--muted)" id="dateB">Nov 5, 2024</div>
+            </div>
+
+            <table class="table" aria-label="Campaign breakdown">
+              <thead><tr><th>Campaign</th><th>Results</th><th class="right">Amount</th></tr></thead>
+              <tbody id="campTable">
+                <tr>
+                  <td id="campText"><span class="pill">P | BRMM</span>&nbsp;| Leads | CBO | 3/25</td>
+                  <td id="resText">220 Impressions</td>
+                  <td class="right" id="campAmt">$8.71</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="summary">
+          <div style="font-size:13px;color:var(--muted)">Invoice</div>
+          <div class="inv" id="invId">#855171904827</div>
+          <div class="row-kv"><div>Method</div><div id="pdMethod">Advertising credit</div></div>
+          <div class="row-kv"><div>Status</div><div style="color:#16a34a;font-weight:800">Paid</div></div>
+          <div class="row-kv"><div>Reference</div><div id="pdRef">8551719048276003-8699907410123833</div></div>
+
+          <div class="actions">
+            <button class="action-btn" id="fullBtn">See full receipt</button>
+            <button class="link-btn" id="manageBtn">Manage your ads</button>
+          </div>
+
+          <!-- Customer care button -->
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="ccBtn" class="link-btn" style="flex:1">Customer care</button>
+          </div>
+
+          <!-- footer with disclaimer -->
+          <div class="foot">
+            <div class="disclaimer">If you think this transaction is unauthorized, kindly contact our customer care no.</div>
+            <div>Customer care: <span class="cc" id="ccDisplay">+1-800-000-0000</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- watermark layers inserted by JS -->
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+/* --- Helpers --- */
+function fmtToday(){ const d=new Date(); const opts={year:'numeric',month:'short',day:'numeric'}; return d.toLocaleDateString(undefined,opts); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updatePreview(){
+  document.getElementById('bizText').innerText = document.getElementById('bizInput').value || 'Business';
+  const trx = document.getElementById('trxInput').value || '';
+  document.getElementById('trxText').innerText = trx;
+  document.getElementById('pdRef').innerText = trx;
+  document.getElementById('invId').innerText = trx ? ('#' + trx.slice(0,12)) : '#TRX';
+
+  const amt = document.getElementById('amountInput').value || '$0.00';
+  document.getElementById('amountText').innerText = amt;
+  document.getElementById('amountB').innerText = amt;
+  document.getElementById('campAmt').innerText = document.getElementById('campAmtInput').value || amt;
+  // date
+  const dateVal = document.getElementById('dateInput').value || fmtToday();
+  document.getElementById('dateB').innerText = dateVal;
+  // small date
+  const dm = dateVal.split(',')[0] || dateVal;
+  const dateMini = document.getElementById('dateMini'); if(dateMini) dateMini.innerText = dm;
+
+  // other fields
+  document.getElementById('reasonB').innerText = document.getElementById('reasonInput') ? document.getElementById('reasonInput').value : 'Ad costs since your last bill.';
+  document.getElementById('productB').innerText = document.getElementById('productInput') ? document.getElementById('productInput').value : 'Meta ads';
+  document.getElementById('payB').innerText = document.getElementById('payInput') ? document.getElementById('payInput').value : 'Advertising credit';
+
+  // campaign
+  const camp = document.getElementById('campInput').value || '';
+  const pill = camp.split('|')[0] ? camp.split('|')[0].trim() : 'Camp';
+  document.getElementById('campText').innerHTML = '<span class="pill">' + escapeHtml(pill) + '</span>&nbsp;' + escapeHtml(camp);
+  document.getElementById('resText').innerText = document.getElementById('resultsInput').value || '';
+
+  // customer care
+  const cc = window._customerCareNumber || '+1-800-000-0000';
+  document.getElementById('ccDisplay').innerText = cc;
+  document.getElementById('ccBtn').onclick = ()=>{ window.open('tel:' + cc.replace(/\s+/g,'')); };
+
+  applyWatermark();
+}
+
+/* --- Watermark --- */
+function applyWatermark(){
+  const txt = document.getElementById('watermarkInput').value.trim();
+  document.querySelectorAll('.wm').forEach(e=>e.remove());
+  if(!txt) return;
+  const receipt = document.getElementById('receipt');
+  const pts = [{l:'25%',t:'30%',s:84,o:0.06,r:-16},{l:'70%',t:'28%',s:64,o:0.05,r:-12},{l:'50%',t:'62%',s:72,o:0.04,r:-18}];
+  pts.forEach(p=>{
+    const el = document.createElement('div');
+    el.className='wm';
+    el.style.left = p.l; el.style.top = p.t;
+    el.style.transform = `translate(-50%,-50%) rotate(${p.r}deg)`;
+    el.style.fontSize = p.s + 'px';
+    el.style.opacity = p.o;
+    el.style.fontWeight = '900';
+    el.style.color = '#222';
+    el.innerText = txt;
+    receipt.appendChild(el);
+  });
+}
+
+/* --- Init and basic bindings --- */
+document.getElementById('todayBtn').addEventListener('click', ()=>{ document.getElementById('dateInput').value = fmtToday(); updatePreview(); });
+window.addEventListener('load', ()=>{ document.getElementById('dateInput').value = fmtToday(); window._customerCareNumber = '+1-800-000-0000'; updatePreview(); });
+document.getElementById('demoBtn').addEventListener('click', ()=>{ document.getElementById('bizInput').value='REWW Academy (1413021655492465)'; document.getElementById('trxInput').value='8551719048276003-8699907410123833'; document.getElementById('amountInput').value='$8.71'; document.getElementById('dateInput').value = fmtToday(); document.getElementById('campInput').value='P | BRMM | Leads | CBO | 3/25 | Budget Manip | BR App LALs'; document.getElementById('resultsInput').value='220 Impressions'; document.getElementById('campAmtInput').value='$8.71'; updatePreview(); });
+document.getElementById('updateBtn').addEventListener('click', updatePreview);
+document.getElementById('clearWatermarkBtn').addEventListener('click', ()=>{ document.getElementById('watermarkInput').value=''; document.querySelectorAll('.wm').forEach(e=>e.remove()); });
+document.getElementById('watermarkBtn').addEventListener('click', applyWatermark);
+
+/* --- Customer care update/reset --- */
+document.getElementById('updateCCBtn').addEventListener('click', ()=>{
+  const v=(document.getElementById('ccInput').value||'').trim();
+  if(!v){ alert('Enter a valid number'); return; }
+  window._customerCareNumber = v;
+  updatePreview();
+});
+document.getElementById('resetCCBtn').addEventListener('click', ()=>{ window._customerCareNumber = '+1-800-000-0000'; document.getElementById('ccInput').value=''; updatePreview(); });
+
+/* --- Export helpers: convert dataURL size in bytes --- */
+function dataURLSize(dataURL){
+  // approximate bytes for base64-encoded dataURL
+  const head = 'data:image/jpeg;base64,';
+  if(dataURL.indexOf(head)===0) dataURL = dataURL.slice(head.length);
+  const padding = (dataURL.endsWith('==')?2:(dataURL.endsWith('=')?1:0));
+  return Math.ceil((dataURL.length * 3) / 4) - padding;
+}
+
+/* --- Download PNG (normal) --- */
+document.getElementById('downloadPng').addEventListener('click', async ()=>{
+  const el = document.getElementById('receipt');
+  const canvas = await html2canvas(el, {backgroundColor:'#ffffff', scale:2, useCORS:true});
+  const data = canvas.toDataURL('image/png', 0.95);
+  const a = document.createElement('a'); a.href = data; a.download = 'receipt.png'; document.body.appendChild(a); a.click(); a.remove();
+});
+
+/* --- Download JPG (preview) simple export --- */
+document.getElementById('downloadJpgPreview').addEventListener('click', async ()=>{
+  const el = document.getElementById('receipt');
+  const canvas = await html2canvas(el, {backgroundColor:'#ffffff', scale:2, useCORS:true});
+  const data = canvas.toDataURL('image/jpeg', 0.85);
+  const a = document.createElement('a'); a.href = data; a.download = 'receipt_preview.jpg'; document.body.appendChild(a); a.click(); a.remove();
+});
+
+/* --- Download JPG ≤ 50 KB (iterative compression + downscale) --- */
+document.getElementById('downloadJpgSmall').addEventListener('click', async ()=>{
+  const el = document.getElementById('receipt');
+
+  // Settings: target size in bytes
+  const TARGET = 50 * 1024; // 50 KB
+
+  // First render at a reasonable scale to preserve detail
+  let baseScale = 2; // initial rendering scale
+  let canvas = await html2canvas(el, {backgroundColor:'#ffffff', scale:baseScale, useCORS:true});
+  let outDataURL = null;
+  let size = Infinity;
+
+  // Try quality reduction first, then downscale if needed
+  const qualities = [0.9,0.8,0.7,0.6,0.5,0.45,0.4,0.35,0.32,0.3];
+  for(let q of qualities){
+    outDataURL = canvas.toDataURL('image/jpeg', q);
+    size = dataURLSize(outDataURL);
+    if(size <= TARGET) break;
+  }
+
+  // If still too big, progressively downscale canvas and retry qualities
+  let downscaleSteps = [1.6,1.4,1.2,1.0,0.9,0.8]; // factors to divide canvas dims by
+  let achieved = (size <= TARGET);
+  for(let factor of downscaleSteps){
+    if(achieved) break;
+    // create smaller canvas by drawing scaled content
+    const w = Math.max(200, Math.round(canvas.width / factor));
+    const h = Math.max(120, Math.round(canvas.height / factor));
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    // draw existing canvas scaled into tmp
+    ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, w, h);
+    // try qualities again
+    for(let q of qualities){
+      outDataURL = tmp.toDataURL('image/jpeg', q);
+      size = dataURLSize(outDataURL);
+      if(size <= TARGET) { achieved = true; break; }
+    }
+    // set canvas to tmp for potential further downscales
+    canvas = tmp;
+  }
+
+  // Final fallback: if not achieved, pick smallest possible from last attempts (already in outDataURL)
+  if(!outDataURL){
+    alert('Failed to create JPG. Try Download PNG or reduce content.');
+    return;
+  }
+
+  // present result info to user briefly (console)
+  console.log('final jpg size (bytes):', size);
+
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = outDataURL;
+  a.download = 'receipt_50kb.jpg';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  // Optional: show warning if final size still > TARGET (shouldn't happen normally)
+  if(size > TARGET){
+    alert('Could not reach ≤50 KB. Final size: ' + Math.round(size/1024) + ' KB. Try removing watermark or simplifying receipt.');
+  }
+});
+
+/* init preview */
+window.addEventListener('load', ()=>{ document.getElementById('dateInput').value = fmtToday(); window._customerCareNumber = '+1-800-000-0000'; updatePreview(); });
+
+</script>
+<script>function notifyParent(){if(window.parent){window.parent.postMessage({type:'IMAGE_GENERATION_SUCCESS',cost:2},'*');}}['downloadWebp','downloadJpg','downloadPng'].forEach(id=>{const btn=document.getElementById(id);if(btn)btn.addEventListener('click',notifyParent);});</script></body>
+</html>
+

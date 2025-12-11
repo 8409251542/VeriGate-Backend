@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Receipt — Thermal Minimal (Fixed)</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root{--muted:#6b7280;--accent:#111}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#f3f4f6;font-family:Inter,system-ui,Arial,sans-serif;color:#0b1220}
+.container{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+.wrap{display:flex;gap:24px;width:100%;max-width:980px}
+.left{width:360px}
+.panel{background:#fff;border-radius:12px;padding:14px;border:1px solid rgba(11,22,38,0.04);box-shadow:0 8px 30px rgba(2,6,23,0.04)}
+.controls h3{margin:0 0 8px 0}
+.field{margin-bottom:8px}
+.label{font-size:12px;color:var(--muted);margin-bottom:6px}
+.input{width:100%;padding:8px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px}
+.table{width:100%;border-collapse:collapse;margin-top:8px}
+.table th,.table td{padding:6px;text-align:left;font-size:13px}
+.btn{width:100%;padding:10px;border-radius:8px;border:0;background:#111;color:#fff;font-weight:700;cursor:pointer}
+.add{background:#06b6d4}
+.small{font-size:12px;color:var(--muted);margin-top:6px}
+.downloads{display:flex;gap:8px;margin-top:10px}
+.small-btn{flex:1;padding:8px;border-radius:8px;border:0;cursor:pointer;font-weight:700}
+.webp{background:#0b69ff;color:#fff}
+.jpg{background:#f97316;color:#fff}
+.png{background:#10b981;color:#fff}
+.status-line{margin-top:10px;color:#92400e;font-size:13px;display:none}
+
+/* Receipt narrow thermal style */
+.receipt-wrap{width:320px;background:#fff;padding:18px;border-radius:8px;border:1px solid rgba(11,22,38,0.06);font-family:'Roboto Mono', monospace}
+.center{text-align:center}
+.logo{width:56px;height:56px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.06);font-weight:800;margin-bottom:8px}
+.store{font-size:14px;margin-bottom:6px;color:#111}
+.meta{font-size:12px;color:var(--muted);margin-bottom:6px}
+.sep{border-top:1px dashed rgba(0,0,0,0.12);margin:8px 0}
+.item{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.item .left{max-width:70%}
+.item .qty{color:var(--muted);font-size:11px}
+.total{display:flex;justify-content:space-between;font-weight:800;margin-top:6px}
+.small-muted{font-size:11px;color:var(--muted)}
+.barcode{margin-top:10px;display:flex;justify-content:center}
+.bar{width:100%;height:46px;background:repeating-linear-gradient(90deg,#000 0 3px,#fff 3px 6px);}
+.notice{margin-top:10px;font-size:12px;color:#111}
+
+@media(max-width:880px){.wrap{flex-direction:column;align-items:center}.left{width:100%}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="wrap">
+    <div class="left">
+      <div class="panel controls">
+        <h3>Receipt Editor (minimal) — Fixed</h3>
+        <div class="field"><label class="label">Store name</label><input id="storeInput" class="input" value="Apple Store, Pioneer Place"></div>
+        <div class="field"><label class="label">Address</label><input id="addressInput" class="input" value="450 SW Yamhill Street, Portland, OR 97204"></div>
+        <div class="field"><label class="label">Customer name</label><input id="custInput" class="input" value="Customer Support"></div>
+        <div class="field"><label class="label">Phone</label><input id="phoneInput" class="input" value="+1 503-265-2010"></div>
+
+        <div class="field"><label class="label">Order ID (will show on receipt)</label><input id="trxInput" class="input" value="ORD-982761"></div>
+
+        <!-- New: Tax rate input -->
+        <div class="field"><label class="label">Tax Rate (%)</label><input id="taxRateInput" class="input" value="7"></div>
+
+        <h4 style="margin-top:10px;margin-bottom:6px">Products</h4>
+        <table class="table" id="productInputTable">
+          <thead><tr><th>Item</th><th style="width:44px">Qty</th><th style="width:68px">Price</th><th></th></tr></thead>
+          <tbody id="productRows">
+            <tr>
+              <td><input class="input" style="padding:6px;border:1px solid #eee" value="AirPods Max - Space Grey"></td>
+              <td><input class="input qty" style="padding:6px;width:44px" value="1"></td>
+              <td><input class="input price" style="padding:6px;width:68px" value="779"></td>
+              <td><button class="remove" style="background:none;border:0;color:#ef4444;cursor:pointer">✕</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="addItemBtn" class="btn add">+ Add</button>
+          <button id="generateBtn" class="btn">Preview</button>
+        </div>
+        <div class="small">The date is fetched automatically. Amount & phone are visible on the receipt.</div>
+        <div class="downloads">
+          <button id="downloadWebp" class="small-btn webp">WebP</button>
+          <button id="downloadJpg" class="small-btn jpg">JPG</button>
+          <button id="downloadPng" class="small-btn png">PNG</button>
+        </div>
+        <div id="statusLine" class="status-line"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="receipt-wrap" id="invoice" aria-hidden="true">
+        <!-- Logo placeholder: edit this element in the HTML if you want to replace with an actual image -->
+        <div class="center">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" 
+         class="logo" 
+         style="object-fit:contain; background:none;" />
+</div>
+
+        <div class="center store" id="storeName">Apple Store, Pioneer Place</div>
+        <div class="center meta" id="addressText">450 SW Yamhill Street • Portland, OR 97204</div>
+
+        <div class="sep"></div>
+        <div class="meta" id="dateText">May 05, 2025</div>
+        <div class="meta" id="custName">Lena Caldwell • 503-265-2010</div>
+        <div class="meta" id="orderIdText">Order: ORD-9827361</div>
+        <div class="sep"></div>
+
+        <div id="itemsBody"></div>
+
+        <div class="sep"></div>
+        <div class="total"><div>Subtotal</div><div id="subtotal">$0.00</div></div>
+        <div class="total"><div>Tax</div><div id="tax">$0.00</div></div>
+        <div class="total" style="margin-top:6px"><div>Total</div><div id="totalPrice">$0.00</div></div>
+
+        <div class="sep"></div>
+        <!-- Card/Approved line removed as requested -->
+
+        <div class="notice">Call now for any queries — to cancel or request a refund.</div>
+
+        <div class="barcode"><div class="bar"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+(function(){
+  const productRows = document.getElementById('productRows');
+  const addItemBtn = document.getElementById('addItemBtn');
+  const generateBtn = document.getElementById('generateBtn');
+  const invoiceEl = document.getElementById('invoice');
+  const statusLine = document.getElementById('statusLine');
+
+  // Add new empty product row
+  addItemBtn.addEventListener('click', ()=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="input" style="padding:6px;border:1px solid #eee" value="New Product"></td>
+      <td><input class="input qty" style="padding:6px;width:44px" value="1"></td>
+      <td><input class="input price" style="padding:6px;width:68px" value="0.00"></td>
+      <td><button class="remove" style="background:none;border:0;color:#ef4444;cursor:pointer">✕</button></td>`;
+    productRows.appendChild(tr);
+    attachRowListeners(tr);
+  });
+
+  // Attach listeners for existing rows
+  function attachRowListeners(row){
+    const rem = row.querySelector('.remove');
+    if(rem) rem.addEventListener('click', ()=>{ row.remove(); });
+  }
+  [...productRows.querySelectorAll('tr')].forEach(r=>attachRowListeners(r));
+
+  function getCurrentDate(){
+    const d = new Date();
+    const opts = { year:'numeric', month:'short', day:'2-digit' };
+    return d.toLocaleDateString(undefined, opts);
+  }
+
+  function renderItems(){
+    const itemsBody = document.getElementById('itemsBody'); itemsBody.innerHTML = '';
+    let subtotal = 0;
+    [...productRows.querySelectorAll('tr')].forEach(row=>{
+      const name = row.children[0].querySelector('input').value || '';
+      const qty = parseFloat(row.children[1].querySelector('input').value)||0;
+      const price = parseFloat(row.children[2].querySelector('input').value)||0;
+      const total = qty*price; subtotal += total;
+      const div = document.createElement('div'); div.className='item';
+      div.innerHTML = `<div class="left"><div>${name}</div><div class="qty">x${qty}</div></div><div>$${total.toFixed(2)}</div>`;
+      itemsBody.appendChild(div);
+    });
+
+    // calculate tax and total
+    const taxRate = parseFloat(document.getElementById('taxRateInput').value) || 0;
+    const taxAmount = +(subtotal * (taxRate / 100));
+    const grandTotal = subtotal + taxAmount;
+
+    document.getElementById('subtotal').innerText = `$${subtotal.toFixed(2)}`;
+    document.getElementById('tax').innerText = `$${taxAmount.toFixed(2)}`;
+    document.getElementById('totalPrice').innerText = `$${grandTotal.toFixed(2)}`;
+  }
+
+  generateBtn.addEventListener('click', ()=>{
+    // Automatically fetch date
+    document.getElementById('dateText').innerText = getCurrentDate();
+    // Populate header fields
+    document.getElementById('storeName').innerText = document.getElementById('storeInput').value || 'Store';
+    document.getElementById('addressText').innerText = document.getElementById('addressInput').value || '';
+    document.getElementById('custName').innerText = (document.getElementById('custInput').value || '') + ' • ' + (document.getElementById('phoneInput').value || '');
+    document.getElementById('orderIdText').innerText = 'Order: ' + (document.getElementById('trxInput').value || '—');
+
+    renderItems();
+    invoiceEl.setAttribute('aria-hidden','false');
+    showStatus('Preview updated');
+  });
+
+  // Image export <=50KB preserved
+  const BYTE_LIMIT = 50*1024;
+  function dataURLtoBlob(dataurl){const arr=dataurl.split(','),mime=arr[0].match(/:(.*?);/)[1];const bstr=atob(arr[1]);let n=bstr.length;const u8arr=new Uint8Array(n);while(n--){u8arr[n]=bstr.charCodeAt(n);}return new Blob([u8arr],{type:mime});}
+  function blobSize(b){return b?b.size:0}
+  function triggerDownload(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove();}
+
+  async function renderInvoiceCanvas(){return await html2canvas(invoiceEl,{backgroundColor:'#ffffff',scale:2,useCORS:true,allowTaint:false,logging:false});}
+  function scaleCanvas(src,targetW){if(targetW>=src.width)return src;const ratio=targetW/src.width;const h=Math.max(1,Math.round(src.height*ratio));const c=document.createElement('canvas');c.width=targetW;c.height=h;const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(src,0,0,targetW,h);return c}
+
+  async function exportConstrained(format){
+    try{showStatus('Rendering image...');const base=await renderInvoiceCanvas();let width=Math.min(700,base.width);let canvas=scaleCanvas(base,width);let quality=0.9;let blob=null;if(format==='png'){for(let i=0;i<12;i++){const dataUrl=canvas.toDataURL('image/png');blob=dataURLtoBlob(dataUrl);if(blobSize(blob)<=BYTE_LIMIT)break;width=Math.max(320,Math.round(width*0.9));canvas=scaleCanvas(base,width);}}else{const mime=(format==='webp')?'image/webp':'image/jpeg';for(let i=0;i<18;i++){const dataUrl=canvas.toDataURL(mime,quality);blob=dataURLtoBlob(dataUrl);if(blobSize(blob)<=BYTE_LIMIT)break;if(quality>0.5){quality=Math.max(0.5,+(quality-0.1).toFixed(2));}else{width=Math.max(320,Math.round(width*0.9));canvas=scaleCanvas(base,width);}}}
+    if(!blob){showStatus('Could not build image',true);return;}const finalKB=(blobSize(blob)/1024).toFixed(1);if(blobSize(blob)>BYTE_LIMIT){showStatus(`Downloaded (best effort ~${finalKB} KB; over 50KB).`,true);}else{showStatus(`Ready. Size: ${finalKB} KB`);}const filename=`receipt-${Date.now()}.${format==='jpg'?'jpg':format}`;triggerDownload(blob,filename);}catch(e){console.error(e);showStatus('Export failed',true)} }
+
+  function showStatus(msg,warn){const el=document.getElementById('statusLine');el.style.display='block';el.textContent=msg;el.style.color=warn?'#b45309':'#374151'}
+
+  async function ensurePreview(){ if(getComputedStyle(invoiceEl).display==='none' || invoiceEl.getAttribute('aria-hidden')==='true'){ generateBtn.click(); await new Promise(r=>setTimeout(r,20)); }}
+
+  document.getElementById('downloadWebp').addEventListener('click',async()=>{await ensurePreview();exportConstrained('webp');});
+  document.getElementById('downloadJpg').addEventListener('click',async()=>{await ensurePreview();exportConstrained('jpg');});
+  document.getElementById('downloadPng').addEventListener('click',async()=>{await ensurePreview();exportConstrained('png');});
+
+  // initial preview
+  generateBtn.click();
+})();
+</script>
+<script>function notifyParent(){if(window.parent){window.parent.postMessage({type:'IMAGE_GENERATION_SUCCESS',cost:2},'*');}}['downloadWebp','downloadJpg','downloadPng'].forEach(id=>{const btn=document.getElementById(id);if(btn)btn.addEventListener('click',notifyParent);});</script></body>
+</html>
+
