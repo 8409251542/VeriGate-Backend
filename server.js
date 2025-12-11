@@ -29,6 +29,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Storage for uploaded files
 const upload = multer({ dest: "uploads/" });
+const uploadMemory = multer({ storage: multer.memoryStorage() });
 
 // Master admin credentials
 async function isAdmin(userId) {
@@ -89,14 +90,14 @@ app.post("/login", async (req, res) => {
 // Add user (admin only)
 app.post("/add-user", async (req, res) => {
   const { requesterId, email, password, max_limit } = req.body;
-console.log("👉 /add-user request body:", req.body);
+  console.log("👉 /add-user request body:", req.body);
   // 1️⃣ Check if requester is admin
   const { data: admin, error: adminError } = await supabase
     .from("admins")
     .select("id")
     .eq("id", requesterId)
     .maybeSingle();
-      console.log("👉 Admin lookup result:", { admin, adminError });
+  console.log("👉 Admin lookup result:", { admin, adminError });
 
   if (adminError || !admin) {
     return res.status(403).json({ message: "Only admin can add users" });
@@ -120,7 +121,7 @@ console.log("👉 /add-user request body:", req.body);
     max_limit: max_limit || 10000, // default 10k if not passed
     used: 0,
   });
-console.log("👉 Insert into user_limits:", { dbError });
+  console.log("👉 Insert into user_limits:", { dbError });
   if (dbError) {
     return res.status(500).json({ message: dbError.message });
   }
@@ -129,7 +130,7 @@ console.log("👉 Insert into user_limits:", { dbError });
   const { data: users, error: usersError } = await supabase
     .from("user_limits")
     .select("id, max_limit, used");
-console.log("👉 Users fetch:", { users, usersError });
+  console.log("👉 Users fetch:", { users, usersError });
 
   if (usersError) {
     return res.status(500).json({ message: usersError.message });
@@ -213,7 +214,7 @@ function sleep(ms) {
 // add at top
 app.post("/upload-csv", upload.single("file"), async (req, res) => {
   const { userId, countryCode } = req.body;
-const defaultCountryCode = countryCode || "+1"; // fallback USA
+  const defaultCountryCode = countryCode || "+1"; // fallback USA
 
   const filePath = req.file.path;
   const ext = req.file.originalname.split(".").pop().toLowerCase();
@@ -234,82 +235,82 @@ const defaultCountryCode = countryCode || "+1"; // fallback USA
   // 2️⃣ Parse file into numbers
   let numbers = [];
 
-if (ext === "csv") {
-  numbers = await new Promise((resolve, reject) => {
-    const arr = [];
-    fs.createReadStream(filePath)
-      .pipe(csv({ headers: false })) // treat everything as raw rows
-      .on("data", (row) => {
-        // row = { field1: "8410000000", field2: ... }
-        let phone = row[Object.keys(row)[0]]; // always first column
-        if (typeof phone === "number") phone = phone.toFixed(0);
-        if (typeof phone === "string" && phone.includes("E")) {
-          const num = Number(phone);
-          if (!isNaN(num)) phone = num.toFixed(0);
-        }
-        arr.push(phone);
-      })
-      .on("end", () => resolve(arr))
-      .on("error", reject);
-  });
-}
-else if (ext === "xlsx" || ext === "xls") {
-  const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 }); 
-  // header:1 → rows as arrays
+  if (ext === "csv") {
+    numbers = await new Promise((resolve, reject) => {
+      const arr = [];
+      fs.createReadStream(filePath)
+        .pipe(csv({ headers: false })) // treat everything as raw rows
+        .on("data", (row) => {
+          // row = { field1: "8410000000", field2: ... }
+          let phone = row[Object.keys(row)[0]]; // always first column
+          if (typeof phone === "number") phone = phone.toFixed(0);
+          if (typeof phone === "string" && phone.includes("E")) {
+            const num = Number(phone);
+            if (!isNaN(num)) phone = num.toFixed(0);
+          }
+          arr.push(phone);
+        })
+        .on("end", () => resolve(arr))
+        .on("error", reject);
+    });
+  }
+  else if (ext === "xlsx" || ext === "xls") {
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+    // header:1 → rows as arrays
 
-  numbers = sheet.map((row, i) => {
-    let phone = row[0]; // always first column
-    // skip first row if not numeric
-    if (i === 0 && (phone === null || phone === undefined || isNaN(Number(phone)))) {
-      return null;
-    }
-    if (typeof phone === "number") phone = phone.toFixed(0);
-    if (typeof phone === "string" && phone.includes("E")) {
-      const num = Number(phone);
-      if (!isNaN(num)) phone = num.toFixed(0);
-    }
-    return phone ? phone.toString().trim() : null;
-  }).filter(Boolean);
-} else if (ext === "txt") {
-  const content = fs.readFileSync(filePath, "utf8");
-  numbers = content.split(/\r?\n/).map((line, i) => {
-    const phone = line.trim();
-    if (i === 0 && isNaN(Number(phone))) return null; // skip header-like first row
-    return phone;
-  }).filter(Boolean);
-}
- else {
+    numbers = sheet.map((row, i) => {
+      let phone = row[0]; // always first column
+      // skip first row if not numeric
+      if (i === 0 && (phone === null || phone === undefined || isNaN(Number(phone)))) {
+        return null;
+      }
+      if (typeof phone === "number") phone = phone.toFixed(0);
+      if (typeof phone === "string" && phone.includes("E")) {
+        const num = Number(phone);
+        if (!isNaN(num)) phone = num.toFixed(0);
+      }
+      return phone ? phone.toString().trim() : null;
+    }).filter(Boolean);
+  } else if (ext === "txt") {
+    const content = fs.readFileSync(filePath, "utf8");
+    numbers = content.split(/\r?\n/).map((line, i) => {
+      const phone = line.trim();
+      if (i === 0 && isNaN(Number(phone))) return null; // skip header-like first row
+      return phone;
+    }).filter(Boolean);
+  }
+  else {
     return res
       .status(400)
       .json({ message: "Unsupported file type. Use CSV, XLSX, or TXT." });
   }
 
   // 3️⃣ Deduplicate
-const uniqueNumbers = [
-  ...new Set(
-    numbers
-      .filter(n => n !== null && n !== undefined) // remove null/undefined
-      .map(n => n.toString().trim())              // ensure string
-      .filter(n => n && !isNaN(Number(n))) // only keep numeric-like values
-   // remove header
-  )
-];
+  const uniqueNumbers = [
+    ...new Set(
+      numbers
+        .filter(n => n !== null && n !== undefined) // remove null/undefined
+        .map(n => n.toString().trim())              // ensure string
+        .filter(n => n && !isNaN(Number(n))) // only keep numeric-like values
+      // remove header
+    )
+  ];
 
 
   const duplicates = numbers.length - uniqueNumbers.length;
 
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
-const clients = [
-  new Numlookup(process.env.NUMLOOKUP_API_KEY_1), 
-  new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-  new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-  new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
-  // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
-];
+  const clients = [
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
+    // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
+  ];
 
- // make sure you initialize these
+  // make sure you initialize these
   let apiIndex = 0;
 
   async function validatePhone(phone) {
@@ -325,22 +326,22 @@ const clients = [
     }
   }
 
-function formatPhone(phone) {
-  if (!phone) return null;
-  phone = phone.replace(/\D/g, ""); // remove non-digits
+  function formatPhone(phone) {
+    if (!phone) return null;
+    phone = phone.replace(/\D/g, ""); // remove non-digits
 
-  // If exactly 10 digits → assume selected country code
-  if (phone.length === 10) {
-    return `${defaultCountryCode}${phone}`;
+    // If exactly 10 digits → assume selected country code
+    if (phone.length === 10) {
+      return `${defaultCountryCode}${phone}`;
+    }
+
+    // If already has 11–13 digits → ensure it starts with +
+    if (phone.length >= 11 && phone.length <= 13) {
+      return phone.startsWith("+") ? phone : `+${phone}`;
+    }
+
+    return null; // invalid
   }
-
-  // If already has 11–13 digits → ensure it starts with +
-  if (phone.length >= 11 && phone.length <= 13) {
-    return phone.startsWith("+") ? phone : `+${phone}`;
-  }
-
-  return null; // invalid
-}
 
 
 
@@ -385,18 +386,18 @@ function formatPhone(phone) {
   }
 
   // 6️⃣ Update DB usage (only valid numbers count)
- // 🟢 new code: deduct USDT based on verified numbers
-const costPerVerification = 0.0011;
-const totalCost = processed * costPerVerification;
+  // 🟢 new code: deduct USDT based on verified numbers
+  const costPerVerification = 0.0011;
+  const totalCost = processed * costPerVerification;
 
-if (userData.usdt_balance < totalCost) {
-  return res.status(403).json({ message: "Not enough USDT balance" });
-}
+  if (userData.usdt_balance < totalCost) {
+    return res.status(403).json({ message: "Not enough USDT balance" });
+  }
 
-await supabase
-  .from("user_limits")
-  .update({ usdt_balance: userData.usdt_balance - totalCost })
-  .eq("id", userId);
+  await supabase
+    .from("user_limits")
+    .update({ usdt_balance: userData.usdt_balance - totalCost })
+    .eq("id", userId);
 
 
   // 7️⃣ Save history
@@ -415,43 +416,43 @@ await supabase
     .select("id");
 
   // 8️⃣ Create CSV in memory
-const fileName = `output-${Date.now()}.csv`;
+  const fileName = `output-${Date.now()}.csv`;
 
-// Make CSV string from verifiedRows
-const csvString = await new Promise((resolve, reject) => {
-  fastcsv
-    .writeToString(verifiedRows, { headers: true })
-    .then(resolve)
-    .catch(reject);
-});
-
-// 9️⃣ Upload CSV to Supabase Storage (bucket: csv-outputs, folder: verified/)
-const { data: storageData, error: storageError } = await supabase.storage
-  .from("csv-outputs")
-  .upload(`verified/${fileName}`, Buffer.from(csvString), {
-    contentType: "text/csv",
-    upsert: true,
+  // Make CSV string from verifiedRows
+  const csvString = await new Promise((resolve, reject) => {
+    fastcsv
+      .writeToString(verifiedRows, { headers: true })
+      .then(resolve)
+      .catch(reject);
   });
 
-if (storageError) {
-  console.error("❌ Supabase upload error:", storageError.message);
-  return res
-    .status(500)
-    .json({ message: "Failed to upload file to storage" });
-}
+  // 9️⃣ Upload CSV to Supabase Storage (bucket: csv-outputs, folder: verified/)
+  const { data: storageData, error: storageError } = await supabase.storage
+    .from("csv-outputs")
+    .upload(`verified/${fileName}`, Buffer.from(csvString), {
+      contentType: "text/csv",
+      upsert: true,
+    });
 
-// 🔟 Get public URL from Supabase
-const { data: publicData } = supabase.storage
-  .from("csv-outputs")
-  .getPublicUrl(`verified/${fileName}`);
+  if (storageError) {
+    console.error("❌ Supabase upload error:", storageError.message);
+    return res
+      .status(500)
+      .json({ message: "Failed to upload file to storage" });
+  }
 
-const fileUrl = publicData.publicUrl;
+  // 🔟 Get public URL from Supabase
+  const { data: publicData } = supabase.storage
+    .from("csv-outputs")
+    .getPublicUrl(`verified/${fileName}`);
 
-// 1️⃣1️⃣ Update DB with Supabase URL
-await supabase
-  .from("verification_history")
-  .update({ file_path: fileUrl })
-  .eq("id", saved[0].id);
+  const fileUrl = publicData.publicUrl;
+
+  // 1️⃣1️⃣ Update DB with Supabase URL
+  await supabase
+    .from("verification_history")
+    .update({ file_path: fileUrl })
+    .eq("id", saved[0].id);
 
 
   // 🔟 Response
@@ -599,8 +600,8 @@ app.get("/purchases", async (req, res) => {
 
 // Approve a purchase (admin)
 app.post("/approve-purchase", async (req, res) => {
-  const { purchaseId,adminId } = req.body;
-if (!(await isAdmin(adminId))) {
+  const { purchaseId, adminId } = req.body;
+  if (!(await isAdmin(adminId))) {
     return res.status(403).json({ message: "Only admin can add users" });
   }
   // 1️⃣ Fetch purchase
@@ -620,22 +621,22 @@ if (!(await isAdmin(adminId))) {
 
   // 2️⃣ Match plan based on amount
   // 🟢 new code: directly credit USDT
-const { data: userLimit, error: fetchLimitError } = await supabase
-  .from("user_limits")
-  .select("usdt_balance")
-  .eq("id", purchase.user_id)
-  .single();
+  const { data: userLimit, error: fetchLimitError } = await supabase
+    .from("user_limits")
+    .select("usdt_balance")
+    .eq("id", purchase.user_id)
+    .single();
 
-if (fetchLimitError || !userLimit) {
-  return res.status(404).json({ message: "User balance not found" });
-}
+  if (fetchLimitError || !userLimit) {
+    return res.status(404).json({ message: "User balance not found" });
+  }
 
-const newBalance = (userLimit.usdt_balance || 0) + parseFloat(purchase.usdt_amount);
+  const newBalance = (userLimit.usdt_balance || 0) + parseFloat(purchase.usdt_amount);
 
-await supabase
-  .from("user_limits")
-  .update({ usdt_balance: newBalance })
-  .eq("id", purchase.user_id);
+  await supabase
+    .from("user_limits")
+    .update({ usdt_balance: newBalance })
+    .eq("id", purchase.user_id);
 
 
   if (updateError) {
@@ -726,11 +727,11 @@ app.post("/get-user-details", async (req, res) => {
       return res.status(400).json({ message: purchaseError.message });
     }
 
-   res.json({
-  email: user.user.email,
-  usdt_balance: limits?.usdt_balance || 0,   // current balance
-  last_recharge: purchases?.length > 0 ? purchases[0] : null,
-});
+    res.json({
+      email: user.user.email,
+      usdt_balance: limits?.usdt_balance || 0,   // current balance
+      last_recharge: purchases?.length > 0 ? purchases[0] : null,
+    });
 
   } catch (err) {
     console.error("🔥 Server error:", err.message);
@@ -901,27 +902,27 @@ app.post("/api/generate-invoice", async (req, res) => {
     }
 
     const hctiResponse = await axios.post(
-  "https://hcti.io/v1/image",
-  {
-    html: invoiceHTML,
+      "https://hcti.io/v1/image",
+      {
+        html: invoiceHTML,
 
-    // 👇 crop ONLY the card, remove outer padding/background
-    selector: "#invoice-root",
+        // 👇 crop ONLY the card, remove outer padding/background
+        selector: "#invoice-root",
 
-    // 👇 small delay is enough (no heavy JS)
-    ms_delay: 200,
+        // 👇 small delay is enough (no heavy JS)
+        ms_delay: 200,
 
-    // 👇 control resolution & file size
-    // 1.0 = smallest, 2.0 = sharper + heavier
-    device_scale: 0.6,
-  },
-  {
-    auth: {
-      username: hctiUserId,
-      password: hctiApiKey,
-    },
-  }
-);
+        // 👇 control resolution & file size
+        // 1.0 = smallest, 2.0 = sharper + heavier
+        device_scale: 0.6,
+      },
+      {
+        auth: {
+          username: hctiUserId,
+          password: hctiApiKey,
+        },
+      }
+    );
 
 
     // API returns something like: { url: "https://hcti.io/v1/image/uuid" }
@@ -1044,30 +1045,127 @@ app.post("/change-password", async (req, res) => {
   }
 });
 
+app.post("/api/generate-report", uploadMemory.single("file"), async (req, res) => {
+  try {
+    const { userId, reportDate } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "File is required" });
+    }
+    if (!reportDate) {
+      return res.status(400).json({ message: "Report date required" });
+    }
+
+    // 🟢 new code: USDT cost (1 per report)
+    const reportCost = 3.5;
+
+    const { data: userData, error: userError } = await supabase
+      .from("user_limits")
+      .select("usdt_balance")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (userData.usdt_balance < reportCost) {
+      return res.status(403).json({ message: "Not enough USDT. Requires 1 USDT." });
+    }
+
+    // Deduct 1 USDT
+    await supabase
+      .from("user_limits")
+      .update({ usdt_balance: userData.usdt_balance - reportCost })
+      .eq("id", userId);
+
+
+    const dateStr = formatDate(reportDate);
+    if (!dateStr) {
+      return res.status(400).json({ message: "Invalid date" });
+    }
+
+    // 2️⃣ Generate report
+    const buffer = req.file.buffer;
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+    if (!rows || !rows.length) {
+      return res.status(400).json({ error: "No rows found in the file" });
+    }
+
+    const zipBuffer = await buildZipFromRows(rows, reportDate); // Uses helper logic
+    const fileName = `buyer_reports_${Date.now()}.zip`;
+
+    // 3️⃣ Upload to Supabase 'reports' bucket
+    const { error: storageError } = await supabase.storage
+      .from("reports") // 🟢 Supabase bucket
+      .upload(fileName, zipBuffer, {
+        contentType: "application/zip",
+        upsert: true,
+      });
+
+    if (storageError) {
+      console.error("❌ Supabase upload error:", storageError.message);
+      return res.status(500).json({ message: "Failed to upload file to storage" });
+    }
+
+    // Get public URL
+    const { data: publicData } = supabase.storage
+      .from("reports")
+      .getPublicUrl(fileName);
+
+    const downloadUrl = publicData.publicUrl;
+
+    // 4️⃣ Save metadata in DB
+    await supabase.from("report_history").insert([
+      {
+        user_id: userId,
+        file_name: fileName,
+        file_path: downloadUrl,
+        usdt_used: reportCost,
+        created_at: new Date(),
+      },
+    ]);
+
+    // 5️⃣ Respond
+    res.json({
+      message: "✅ Report generated successfully",
+      downloadUrl: downloadUrl,
+      tokens_used: 2000,
+    });
+  } catch (err) {
+    console.error("❌ Report generation failed:", err);
+    res.status(500).json({ message: "Report generation failed", error: err.message });
+  }
+});
+
 
 // Add this to your server.js file
 
 // Invoice Generator API - Costs 2 USDT per generation
 app.post("/api/generate-invoice", async (req, res) => {
   try {
-    const { 
-      userId, 
+    const {
+      userId,
       companyName,
-      phoneNumber, 
-      supportPhone, 
-      date, 
+      phoneNumber,
+      supportPhone,
+      date,
       amount,          // can be "189.25", "$189.25", "189.25 USDT" etc.
-      transactionId, 
+      transactionId,
       invoiceNumber,
-      logoUrl 
+      logoUrl
     } = req.body;
 
     console.log("📝 Invoice generation request:", { userId, companyName, amount });
 
     // Validate required fields
     if (!userId || !companyName || !phoneNumber || amount == null) {
-      return res.status(400).json({ 
-        message: "Missing required fields: userId, companyName, phoneNumber, amount" 
+      return res.status(400).json({
+        message: "Missing required fields: userId, companyName, phoneNumber, amount"
       });
     }
 
@@ -1084,8 +1182,8 @@ app.post("/api/generate-invoice", async (req, res) => {
     }
 
     if (userData.usdt_balance < invoiceCost) {
-      return res.status(403).json({ 
-        message: `Insufficient USDT balance. Required: ${invoiceCost} USDT` 
+      return res.status(403).json({
+        message: `Insufficient USDT balance. Required: ${invoiceCost} USDT`
       });
     }
 
@@ -1114,14 +1212,14 @@ app.post("/api/generate-invoice", async (req, res) => {
     // 4️⃣ Launch headless browser and capture screenshot (bigger & higher quality)
     const puppeteer = require("puppeteer");
 
-const browser = await puppeteer.launch({
-  headless: true,
-  executablePath: puppeteer.executablePath(), // 👈 let Puppeteer figure it out
-  args: ["--no-sandbox", "--disable-setuid-sandbox"],
-});
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath: puppeteer.executablePath(), // 👈 let Puppeteer figure it out
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
 
 
-    
+
     const page = await browser.newPage();
     await page.setViewport({ width: 1000, height: 650 }); // a bit bigger → larger file
     await page.setContent(invoiceHTML, { waitUntil: "networkidle0" });
@@ -1206,9 +1304,9 @@ const browser = await puppeteer.launch({
 
   } catch (err) {
     console.error("❌ Invoice generation failed:", err);
-    res.status(500).json({ 
-      message: "Invoice generation failed", 
-      error: err.message 
+    res.status(500).json({
+      message: "Invoice generation failed",
+      error: err.message
     });
   }
 });
@@ -1430,6 +1528,331 @@ app.use("/uploads/reports", express.static(path.join(__dirname, "uploads/reports
 app.use("/reports", express.static(path.join(__dirname, "uploads/reports")));
 
 //frontend
+
+
+
+
+// ===== Helper functions (ported from newrepor.html) =====
+
+function formatDateSlug(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) throw new Error("Invalid date: " + dateStr);
+  const day = d.getDate();
+  const monthNames = [
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+  ];
+  const month = monthNames[d.getMonth()];
+  const slug = day + month;
+  const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
+  return { slug, weekday };
+}
+
+function buyerFirstWord(buyer) {
+  if (buyer === undefined || buyer === null) return "unknown";
+  const s = String(buyer).trim();
+  if (!s || s === "0") return "unknown";
+  return s.split(/\s+/)[0];
+}
+
+function last4Digits(value) {
+  const digits = String(value).replace(/\D+/g, "");
+  if (!digits) return "";
+  return digits.length > 4 ? digits.slice(-4) : digits;
+}
+
+function sanitizeCampaignName(camp) {
+  if (camp === undefined || camp === null) return "unknown";
+  return String(camp).trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function cleanForwardedAndCaller(rows, colForwarded, colCaller) {
+  return rows.filter((r) => {
+    let fn = r[colForwarded];
+    let ci = r[colCaller];
+
+    fn = fn === undefined || fn === null ? "" : String(fn).trim();
+    ci = ci === undefined || ci === null ? "" : String(ci).trim();
+
+    if (!fn || fn === "0" || fn === "0.0") return false;
+
+    const ciLower = ci.toLowerCase();
+    if (ciLower === "anonymous" || ciLower === "restricted") return false;
+
+    r[colForwarded] = fn;
+    r[colCaller] = ci;
+    return true;
+  });
+}
+
+function adjustBillseconds(rows, colBill) {
+  rows.forEach((r) => {
+    let v = r[colBill];
+    if (v === undefined || v === null || v === "") v = 0;
+    v = parseInt(v, 10);
+    if (isNaN(v)) v = 0;
+    if (v >= 0 && v <= 14) v = 40;
+    r[colBill] = v;
+  });
+  return rows;
+}
+
+function excelSerialToDate(serial) {
+  const s = Number(serial);
+  if (isNaN(s)) return null;
+  const utc_days = Math.floor(s - 25569);
+  const utc_value = utc_days * 86400;
+  const fractional = s - Math.floor(s);
+  const seconds = Math.round(fractional * 86400);
+  return new Date((utc_value + seconds) * 1000);
+}
+
+function formatDateTime(dt) {
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    dt.getFullYear() +
+    "-" +
+    pad(dt.getMonth() + 1) +
+    "-" +
+    pad(dt.getDate()) +
+    " " +
+    pad(dt.getHours()) +
+    ":" +
+    pad(dt.getMinutes()) +
+    ":" +
+    pad(dt.getSeconds())
+  );
+}
+
+function convertCallStart(rows, colCallStart) {
+  rows.forEach((r) => {
+    const v = r[colCallStart];
+    if (v === undefined || v === null || v === "") return;
+
+    if (v instanceof Date) {
+      r[colCallStart] = formatDateTime(v);
+      return;
+    }
+
+    const num = Number(v);
+    if (!isNaN(num)) {
+      const dt = excelSerialToDate(num);
+      if (dt) r[colCallStart] = formatDateTime(dt);
+    }
+  });
+}
+
+// Drop specific columns by name
+function dropUnwantedColumns(rows) {
+  const DROP = new Set([
+    "did",
+    "call_answer",
+    "call_end",
+    "missed",
+    "tta",
+    "duplicate",
+    "caller_valid",
+    "caller_voip",
+    "abuse_caller",
+    "fraudscore",
+    "caller_carrier",
+    "caller_linetype",
+    "caller_risky",
+    "caller_country",
+    "caller_name",
+    "caller_spammer",
+    "recordingfile",
+    "ringseconds",
+    "routing_attempt",
+    "duration",
+    "recordingUrl",
+  ]);
+  return rows.map((row) => {
+    const out = {};
+    Object.keys(row).forEach((k) => {
+      if (!DROP.has(k)) out[k] = row[k];
+    });
+    return out;
+  });
+}
+
+function groupByCampaign(rows, colCamp) {
+  const map = new Map();
+  rows.forEach((r) => {
+    const camp =
+      r[colCamp] === undefined || r[colCamp] === null
+        ? ""
+        : String(r[colCamp]).trim();
+    if (!camp) return;
+    if (!map.has(camp)) map.set(camp, []);
+    map.get(camp).push(r);
+  });
+  return map;
+}
+
+function uniqueRowsByCallerId(rows, colCaller) {
+  const seen = new Set();
+  const result = [];
+  rows.forEach((r) => {
+    const ci =
+      r[colCaller] === undefined || r[colCaller] === null
+        ? ""
+        : String(r[colCaller]).trim();
+    if (!ci) return;
+    if (seen.has(ci)) return;
+    seen.add(ci);
+    result.push(r);
+  });
+  return result;
+}
+
+// ===== Core processing =====
+
+async function buildZipFromRows(rows, dateStr) {
+  const { slug: dateSlug, weekday } = formatDateSlug(dateStr);
+
+  const keys = Object.keys(rows[0] || {});
+  const colBuyer = keys.includes("buyername")
+    ? "buyername"
+    : keys.includes("buyernam")
+      ? "buyernam"
+      : "buyername";
+  const colCamp = keys.includes("campname")
+    ? "campname"
+    : keys.includes("campnam")
+      ? "campnam"
+      : "campname";
+  const colBill = "billseconds";
+  const colForwarded = "forwardednumber";
+  const colCaller = "callerid";
+  const colCallStart = keys.includes("call_start") ? "call_start" : null;
+
+  const required = [colCamp, colForwarded, colCaller, colBuyer, colBill];
+  required.forEach((col) => {
+    const hasCol = rows.some((r) =>
+      Object.prototype.hasOwnProperty.call(r, col)
+    );
+    if (!hasCol) {
+      throw new Error("Missing required column: " + col);
+    }
+  });
+
+  // Step 1: drop columns
+  rows = dropUnwantedColumns(rows);
+
+  // Step 2: clean forwarded & caller
+  rows = cleanForwardedAndCaller(rows, colForwarded, colCaller);
+
+  // Step 3: adjust billseconds
+  rows = adjustBillseconds(rows, colBill);
+
+  // Optional: convert call_start
+  if (colCallStart) {
+    convertCallStart(rows, colCallStart);
+  }
+
+  const zip = new JSZip();
+  const campMap = groupByCampaign(rows, colCamp);
+  if (campMap.size === 0) {
+    throw new Error("No campaign data found (camp name empty).");
+  }
+
+  for (const [camp, campRows] of campMap.entries()) {
+    const campTag = sanitizeCampaignName(camp);
+    const campFolder = zip.folder(campTag || "campaign");
+    const txtLines = [];
+    const buyerStats = {}; // buyer -> { tfns:Set, calls:number, tfnLines:[{fnLast4,calls}] }
+    let totalCallsCampaign = 0;
+
+    const uniqueCallerSetCampaign = new Set();
+    campRows.forEach((r) => {
+      const ci =
+        r[colCaller] === undefined || r[colCaller] === null
+          ? ""
+          : String(r[colCaller]).trim();
+      if (ci) uniqueCallerSetCampaign.add(ci);
+    });
+
+    const tfnMap = new Map();
+    campRows.forEach((r) => {
+      const fn = r[colForwarded];
+      if (!fn) return;
+      if (!tfnMap.has(fn)) tfnMap.set(fn, []);
+      tfnMap.get(fn).push(r);
+    });
+
+    for (const [fn, fnRows] of tfnMap.entries()) {
+      const uniqueRows = uniqueRowsByCallerId(fnRows, colCaller);
+      const callsCount = uniqueRows.length;
+      totalCallsCampaign += callsCount;
+      if (callsCount === 0) continue;
+
+      const buyer = buyerFirstWord(uniqueRows[0][colBuyer]);
+      const fnLast4 = last4Digits(fn) || String(fn);
+
+      if (!buyerStats[buyer]) {
+        buyerStats[buyer] = { tfns: new Set(), calls: 0, tfnLines: [] };
+      }
+      buyerStats[buyer].tfns.add(fnLast4);
+      buyerStats[buyer].calls += callsCount;
+      buyerStats[buyer].tfnLines.push({ fnLast4, callsCount });
+
+      const excelFilename = `${buyer} ${dateSlug} (${fnLast4}) - ${callsCount} calls - ${campTag}.xlsx`;
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(uniqueRows);
+      XLSX.utils.book_append_sheet(wb, ws, "Calls");
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+      campFolder.file(excelFilename, wbout);
+    }
+
+    // Build TXT (buyer-wise + totals)
+    const buyerNames = Object.keys(buyerStats);
+    buyerNames.forEach((buyer) => {
+      const info = buyerStats[buyer];
+      info.tfnLines.forEach((t) => {
+        txtLines.push(
+          `${buyer} ${dateSlug} ${campTag} ${t.fnLast4} ${t.callsCount}`
+        );
+      });
+      txtLines.push("-----------------------------------------");
+      txtLines.push(
+        `${buyer} - ${info.tfns.size} tfn - ${info.calls} calls - ${dateSlug} ${weekday}`
+      );
+      txtLines.push("-----------------------------------------");
+      txtLines.push("");
+    });
+
+    const uniqueCallersCampaign = uniqueCallerSetCampaign.size;
+    const totalCalls = totalCallsCampaign;
+    const repeatCalls = totalCalls - uniqueCallersCampaign;
+
+    txtLines.push(`TOTAL\t${totalCalls}`);
+    txtLines.push(`Uniuqe  ${uniqueCallersCampaign}`);
+    txtLines.push(`REPEAT  ${repeatCalls}`);
+
+    const txtContent = txtLines.join("\n");
+    const txtFilename = `${dateSlug} ${campTag} CDR.txt`;
+    campFolder.file(txtFilename, txtContent);
+  }
+
+  // Return ZIP buffer for response
+  return await zip.generateAsync({ type: "nodebuffer" });
+}
+
+
 
 
 const PORT = process.env.PORT || 5000;
