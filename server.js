@@ -301,6 +301,16 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
 
   const duplicates = numbers.length - uniqueNumbers.length;
 
+  // 3.5️⃣ Upfront Balance Check (Prevent wastage)
+  const costPerVerification = 0.0011;
+  const estimatedCost = uniqueNumbers.length * costPerVerification;
+
+  if (userData.usdt_balance < estimatedCost) {
+    return res.status(403).json({
+      message: `Insufficient balance. Required: ${estimatedCost.toFixed(4)} USDT, Available: ${userData.usdt_balance.toFixed(4)} USDT`
+    });
+  }
+
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
   const clients = [
     new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
@@ -387,7 +397,7 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
 
   // 6️⃣ Update DB usage (only valid numbers count)
   // 🟢 new code: deduct USDT based on verified numbers
-  const costPerVerification = 0.0011;
+
   const totalCost = processed * costPerVerification;
 
   if (userData.usdt_balance < totalCost) {
@@ -1601,7 +1611,7 @@ function adjustBillseconds(rows, colBill) {
     if (v === undefined || v === null || v === "") v = 0;
     v = parseInt(v, 10);
     if (isNaN(v)) v = 0;
-    if (v >= 0 && v <= 14) v = 40;
+
     r[colBill] = v;
   });
   return rows;
