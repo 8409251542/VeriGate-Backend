@@ -314,9 +314,9 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
   const clients = [
     new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
+    // new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
+    // new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
+    // new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
     // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
   ];
 
