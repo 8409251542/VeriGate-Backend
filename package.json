@@ -23,6 +23,9 @@
     "fast-csv": "^5.0.5",
     "jszip": "^3.10.1",
     "multer": "^2.0.2",
+    "nodemailer": "^7.0.11",
+    "socks": "^2.8.7",
+    "socks-proxy-agent": "^8.0.5",
     "xlsx": "^0.18.5"
   }
 }

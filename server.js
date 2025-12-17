@@ -17,6 +17,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Import MyMail Routes
+const myMailRoutes = require("./routes/myMailRoutes");
+app.use("/api/mymail", myMailRoutes);
 
 const Numlookup = NumlookupapiModule.default; // get the default class
 
@@ -314,9 +317,9 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
   const clients = [
     new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
-    // new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-    // new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-    // new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
     // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
   ];
 
@@ -1149,6 +1152,56 @@ app.post("/api/generate-report", uploadMemory.single("file"), async (req, res) =
   } catch (err) {
     console.error("❌ Report generation failed:", err);
     res.status(500).json({ message: "Report generation failed", error: err.message });
+  }
+});
+
+// 🟢 AI Image Cost Deduction
+app.post("/api/deduct-image-cost", async (req, res) => {
+  try {
+    const { userId, amount = 2, toolName = "AI Image Gen" } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    // 1️⃣ Check Balance
+    const { data: userData, error: userError } = await supabase
+      .from("user_limits")
+      .select("usdt_balance")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (userData.usdt_balance < amount) {
+      return res.status(403).json({ message: "Insufficient balance" });
+    }
+
+    // 2️⃣ Deduct Balance
+    const newBalance = userData.usdt_balance - amount;
+    const { error: updateError } = await supabase
+      .from("user_limits")
+      .update({ usdt_balance: newBalance })
+      .eq("id", userId);
+
+    if (updateError) throw updateError;
+
+    // 3️⃣ Log Usage (Optional: using invoice_history for tracking)
+    await supabase.from("invoice_history").insert([{
+      user_id: userId,
+      company_name: toolName, // Reusing column for tool name
+      amount: 0,
+      usdt_used: amount,
+      created_at: new Date()
+    }]);
+
+    res.json({ success: true, newBalance });
+
+  } catch (err) {
+    console.error("❌ Deduction error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
