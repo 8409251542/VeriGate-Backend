@@ -35,12 +35,10 @@ router.get("/servers/available", async (req, res) => {
 
 // ADMIN: Add a new server
 router.post("/admin/servers", async (req, res) => {
-    // ... existing single add logic if needed, or keep for legacy ...
-    // optimized to reuse the bulk logic or just keep separate
     const { ip, port, username, password, provider, country, price } = req.body;
-    // ... (keeping existing logic for single add if you want, or just overwriting)
-    // Actually, let's just add the bulk route BELOW the single one or replace it.
-    // For safety, I will append the NEW bulk route below.
+
+    // Basic validation
+    if (!ip || !port) return res.status(400).json({ message: "IP and Port required" });
     try {
         const { data, error } = await supabase
             .from("servers")
