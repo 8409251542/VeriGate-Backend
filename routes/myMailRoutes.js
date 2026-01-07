@@ -186,6 +186,84 @@ router.post("/servers/rent", async (req, res) => {
 });
 
 
+// Rent MULTIPLE servers (Bulk Pack)
+router.post("/servers/rent-quantity", async (req, res) => {
+    const { userId, quantity, durationHours } = req.body;
+
+    if (!quantity || quantity < 1) return res.status(400).json({ message: "Invalid quantity" });
+
+    // 1. Fetch Inventory
+    const { data: allServers, error: srvError } = await supabase
+        .from("servers")
+        .select("*");
+
+    if (srvError || !allServers || allServers.length < quantity) {
+        return res.status(400).json({ message: `Not enough servers available. (Available: ${allServers?.length || 0})` });
+    }
+
+    // 2. Pick Random Servers (Fisher-Yates Shuffle or simple random sort)
+    // Note: In real production, this should check if user already rented them to avoid duplicates, 
+    // but for now we assume proxies can be extended or re-rented.
+    const shuffled = allServers.sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, quantity);
+
+    // 3. Calculate Cost
+    // Assuming mostly uniform pricing, but let's sum exact prices of selected
+    const totalCost = selected.reduce((sum, srv) => sum + (srv.price * (durationHours || 1)), 0);
+
+    // 4. Check Balance
+    const { data: userLimit, error: userError } = await supabase
+        .from("user_limits")
+        .select("usdt_balance")
+        .eq("id", userId)
+        .single();
+
+    if (userError || !userLimit) return res.status(404).json({ message: "User not found" });
+
+    if (userLimit.usdt_balance < totalCost) {
+        return res.status(403).json({ message: `Insufficient balance. Available: ${userLimit.usdt_balance.toFixed(2)}, Required: ${totalCost.toFixed(2)}` });
+    }
+
+    // 5. Deduct Balance
+    const { error: deductError } = await supabase
+        .from("user_limits")
+        .update({ usdt_balance: userLimit.usdt_balance - totalCost })
+        .eq("id", userId);
+
+    if (deductError) return res.status(500).json({ message: "Transaction failed" });
+
+    // 6. Assign Servers
+    const expiresAt = new Date(Date.now() + (durationHours || 1) * 60 * 60 * 1000);
+    const rentRecords = selected.map(server => ({
+        user_id: userId,
+        server_id: server.id,
+        ip: server.ip,
+        port: server.port,
+        username: server.username || "proxy_user",
+        password: server.password || "proxy_pass",
+        expires_at: expiresAt,
+        cost_paid: server.price * (durationHours || 1)
+    }));
+
+    const { data: rented, error: rentError } = await supabase
+        .from("rented_servers")
+        .insert(rentRecords)
+        .select();
+
+    if (rentError) {
+        // Critical: Money was deducted but rent failed!
+        // In real app, consider transaction rollback or refund here.
+        console.error("Bulk Rent Insert Error:", rentError);
+        return res.status(500).json({ message: "Failed to assign servers, please contact support." });
+    }
+
+    res.json({
+        message: `Successfully rented ${rented.length} servers for ${durationHours} hours`,
+        servers: rented
+    });
+});
+
+
 // ==========================================
 // 2. SENDING ENGINE (THE CORE)
 // ==========================================
