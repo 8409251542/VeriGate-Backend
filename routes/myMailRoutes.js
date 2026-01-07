@@ -264,6 +264,84 @@ router.post("/servers/rent-quantity", async (req, res) => {
 });
 
 
+// Rent ALL (Special Plans)
+router.post("/servers/rent-plan", async (req, res) => {
+    const { userId, planId } = req.body;
+
+    let durationHours = 0;
+    let cost = 0;
+
+    // Define Plans
+    if (planId === "1h_pack") {
+        durationHours = 1;
+        cost = 2.0;
+    } else if (planId === "3h_pack") {
+        durationHours = 3;
+        cost = 3.5;
+    } else {
+        return res.status(400).json({ message: "Invalid Plan ID" });
+    }
+
+    // 1. Fetch Inventory (ALL)
+    const { data: allServers, error: srvError } = await supabase
+        .from("servers")
+        .select("*");
+
+    if (srvError || !allServers || allServers.length === 0) {
+        return res.status(400).json({ message: "No servers available to rent." });
+    }
+
+    // 2. Check Balance
+    const { data: userLimit, error: userError } = await supabase
+        .from("user_limits")
+        .select("usdt_balance")
+        .eq("id", userId)
+        .single();
+
+    if (userError || !userLimit) return res.status(404).json({ message: "User not found" });
+
+    if (userLimit.usdt_balance < cost) {
+        return res.status(403).json({ message: `Insufficient balance. Available: ${userLimit.usdt_balance.toFixed(2)}, Required: ${cost.toFixed(2)}` });
+    }
+
+    // 3. Deduct Balance
+    const { error: deductError } = await supabase
+        .from("user_limits")
+        .update({ usdt_balance: userLimit.usdt_balance - cost })
+        .eq("id", userId);
+
+    if (deductError) return res.status(500).json({ message: "Transaction failed" });
+
+    // 4. Assign Servers
+    const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000);
+    const rentRecords = allServers.map(server => ({
+        user_id: userId,
+        server_id: server.id,
+        ip: server.ip,
+        port: server.port,
+        username: server.username || "proxy_user",
+        password: server.password || "proxy_password",
+        expires_at: expiresAt,
+        cost_paid: cost / allServers.length // Distributed cost for record keeping (optional)
+    }));
+
+    const { data: rented, error: rentError } = await supabase
+        .from("rented_servers")
+        .insert(rentRecords)
+        .select();
+
+    if (rentError) {
+        console.error("Rent Plan Error:", rentError);
+        return res.status(500).json({ message: "Failed to assign servers. Contact Support." });
+    }
+
+    res.json({
+        message: `Successfully rented ALL ${rented.length} servers for ${durationHours} hours`,
+        servers: rented
+    });
+});
+
+
 // ==========================================
 // 2. SENDING ENGINE (THE CORE)
 // ==========================================
