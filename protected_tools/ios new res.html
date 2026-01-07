@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f2f3f7;
+    }
+
+    /* ===== APP LAYOUT ===== */
+    .app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ===== LEFT FORM ===== */
+    .left {
+      width: 50%;
+      padding: 20px;
+      background: #ffffff;
+      border-right: 1px solid #ddd;
+    }
+
+    h3,
+    h4 {
+      margin-top: 0
+    }
+
+    input,
+    button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    button {
+      background: #0071e3;
+      color: #fff;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #666
+    }
+
+    .product-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    /* ===== RIGHT PREVIEW ===== */
+    .right {
+      width: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #eef0f4;
+    }
+
+    /* ===== EXPORT WRAPPER (CRITICAL) ===== */
+    #export-wrap {
+      width: 504px;
+      /* locked size → stable KB */
+      background: #e6e6e6;
+      padding: 22px;
+      border-radius: 18px;
+    }
+
+    /* ===== INVOICE CARD ===== */
+    #invoice {
+      background: #ffffff;
+      padding: 26px 22px 24px;
+      border-radius: 14px;
+      font-size: 13px;
+      color: #222;
+    }
+
+    /* ===== HEADER ===== */
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+    }
+
+    .left-head {
+      display: flex;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 32px;
+      opacity: .9;
+      filter: grayscale(100%);
+    }
+
+    .store {
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 6px;
+    }
+
+    .right-head {
+      text-align: right;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .right-head div {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 10px;
+    }
+
+    .right-head span:first-child {
+      color: #666;
+      min-width: 70px;
+      text-align: left;
+    }
+
+    /* ===== TITLE ===== */
+    .invoice-title {
+      text-align: center;
+      margin: 20px 0 14px;
+      font-size: 22px;
+      letter-spacing: 2px;
+      font-weight: 600;
+    }
+
+    /* ===== DIVIDER ===== */
+    .hr {
+      border-top: 1px solid #ddd;
+      margin: 12px 0;
+    }
+
+    /* ===== TABLE ===== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #f5f7fa;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    th,
+    td {
+      padding: 8px 6px;
+      border-bottom: 1px solid #e3e6ea;
+      text-align: center;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none
+    }
+
+    /* ===== TOTAL ===== */
+    .total {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 2px dashed #ccc;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* ===== FOOTER ===== */
+    .footer {
+      margin-top: 16px;
+      font-size: 12px;
+    }
+
+    .policy {
+      font-size: 11px;
+      color: #555;
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+
+    /* ===== SIGNATURE ===== */
+    .signature {
+      margin-top: 22px;
+      text-align: right;
+    }
+
+    .signature img {
+      width: 120px;
+      opacity: .8;
+    }
+
+    .sign-text {
+      font-size: 11px;
+      color: #555;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app">
+
+    <!-- LEFT FORM -->
+    <div class="left">
+      <h3>Invoice Inputs</h3>
+
+      <label>Customer Support</label>
+      <input id="support" value="+1 800 555 0199"><br><br>
+
+      <label>Date</label>
+      <input id="date" type="date"><br><br>
+
+      <h4>Products</h4>
+
+      <div id="products">
+        <div class="product-row">
+          <input value="AirPods Pro (2nd Gen)">
+          <input type="number" value="1">
+          <input type="number" step="0.01" value="240.50">
+        </div>
+        <div class="product-row">
+          <input value="Smartwatch Series 9">
+          <input type="number" value="1">
+          <input type="number" step="0.01" value="320.54">
+        </div>
+      </div>
+
+      <div class="controls">
+        <button onclick="addProduct()">Add</button>
+        <button class="secondary" onclick="removeProduct()">Remove</button>
+      </div>
+
+      <button onclick="generate()">Generate</button><br><br>
+      <button onclick="download()">Download JPG</button>
+    </div>
+
+    <!-- RIGHT PREVIEW -->
+    <div class="right">
+      <div id="export-wrap">
+        <div id="invoice">
+
+          <div class="header">
+            <div class="left-head">
+              <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg">
+              <div class="store">
+                Apple Garden State Plaza<br>
+                Paramus, NJ, United States
+              </div>
+            </div>
+
+            <div class="right-head">
+              <div><span>Invoice No</span><span id="invNo"></span></div>
+              <div><span>Date</span><span id="rDate"></span></div>
+            </div>
+          </div>
+
+          <div class="invoice-title">INVOICE</div>
+          <div class="hr"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceItems"></tbody>
+          </table>
+
+          <div class="total">
+            <span>Total</span>
+            <span id="grandTotal"></span>
+          </div>
+
+          <div class="footer">
+            <strong>Payment Method: Apple Pay</strong><br>
+            Customer Support: <span id="rSupport"></span>
+
+            <div class="policy">
+              Refunds reviewed within 12 hours.<br>
+              Automated invoice.
+            </div>
+          </div>
+
+          <div class="signature">
+            <img src="https://onlinepngtools.com/images/examples-onlinepngtools/george-walker-bush-signature.png">
+            <div class="sign-text">Authorized Signatory</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.getElementById("date").valueAsDate = new Date();
+
+    function randInvoice() {
+      return "FPX-" + Math.floor(100000 + Math.random() * 900000);
+    }
+
+    function addProduct() {
+      const d = document.createElement("div");
+      d.className = "product-row";
+      d.innerHTML = `<input value="New Product">
+               <input type="number" value="1">
+               <input type="number" step="0.01" value="0.00">`;
+      products.appendChild(d);
+    }
+
+    function removeProduct() {
+      if (products.children.length > 1)
+        products.removeChild(products.lastChild);
+    }
+
+    function generate() {
+      invoiceItems.innerHTML = "";
+      let total = 0;
+
+      document.querySelectorAll(".product-row").forEach(r => {
+        const n = r.children[0].value;
+        const q = +r.children[1].value || 0;
+        const p = +r.children[2].value || 0;
+        const t = q * p;
+        total += t;
+
+        invoiceItems.innerHTML += `
+      <tr>
+        <td>${n}</td>
+        <td>${q}</td>
+        <td>$${p.toFixed(2)}</td>
+        <td>$${t.toFixed(2)}</td>
+      </tr>`;
+      });
+
+      grandTotal.innerText = "$" + total.toFixed(2);
+      rSupport.innerText = support.value;
+      rDate.innerText = date.value;
+      invNo.innerText = randInvoice();
+    }
+
+    function download() {
+      if (window.parent) { window.parent.postMessage({ type: 'IMAGE_GENERATION_SUCCESS', cost: 2 }, '*'); }
+      html2canvas(document.getElementById("invoice"), {
+        backgroundColor: null,
+        scale: 1.75,
+        useCORS: true
+      }).then(canvas => {
+        canvas.toBlob(blob => {
+          const kb = (blob.size / 1024).toFixed(1);
+
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "invoice.jpg";
+          a.click();
+        }, "image/jpeg", 0.82);
+      });
+    }
+  </script>
+
+
+</body>
+
+</html>
