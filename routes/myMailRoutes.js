@@ -35,11 +35,12 @@ router.get("/servers/available", async (req, res) => {
 
 // ADMIN: Add a new server
 router.post("/admin/servers", async (req, res) => {
+    // ... existing single add logic if needed, or keep for legacy ...
+    // optimized to reuse the bulk logic or just keep separate
     const { ip, port, username, password, provider, country, price } = req.body;
-
-    // Basic validation
-    if (!ip || !port) return res.status(400).json({ message: "IP and Port required" });
-
+    // ... (keeping existing logic for single add if you want, or just overwriting)
+    // Actually, let's just add the bulk route BELOW the single one or replace it.
+    // For safety, I will append the NEW bulk route below.
     try {
         const { data, error } = await supabase
             .from("servers")
@@ -59,6 +60,33 @@ router.post("/admin/servers", async (req, res) => {
         res.json({ message: "✅ Server added to inventory", server: data });
     } catch (err) {
         res.status(500).json({ message: err.message });
+    }
+});
+
+// ADMIN: Bulk Add Servers (For importing Webshare CSV/TXT)
+router.post("/admin/servers/bulk", async (req, res) => {
+    const { servers } = req.body; // Expects array of { ip, port, username, password ... }
+    if (!servers || !Array.isArray(servers)) return res.status(400).json({ message: "Invalid format" });
+
+    try {
+        const { data, error } = await supabase
+            .from("servers")
+            .insert(servers.map(s => ({
+                ip: s.ip,
+                port: s.port,
+                username: s.username,
+                password: s.password,
+                provider: s.provider || "Webshare",
+                country: s.country || "Global",
+                price: 1.5 // Default price for imported premium proxies
+            })))
+            .select();
+
+        if (error) throw error;
+        res.json({ message: `✅ Imported ${data.length} servers`, servers: data });
+    } catch (err) {
+        console.error("Bulk Import Error:", err);
+        res.status(500).json({ message: "Failed to import servers" });
     }
 });
 
@@ -183,11 +211,15 @@ router.post("/send-batch", async (req, res) => {
                 .single();
 
             if (proxyServer) {
-                // Construct SOCKS connection string
-                // socks5://user:pass@ip:port
-                const connectionString = `socks5://${proxyServer.username}:${proxyServer.password}@${proxyServer.ip}:${proxyServer.port}`;
+                // Construct plain proxy config for SocksClient
+                // We no longer use 'socks-proxy-agent' since we use 'socks' directly for better control
                 console.log(`   Tunneling via ${proxyServer.ip}`);
-                proxyAgent = new SocksProxyAgent(connectionString);
+                proxyAgent = {
+                    host: proxyServer.ip,
+                    port: parseInt(proxyServer.port),
+                    userId: proxyServer.username,
+                    password: proxyServer.password
+                };
             }
         }
 
@@ -251,24 +283,46 @@ router.post("/send-batch", async (req, res) => {
         }
 
         // C. CREATE TRANSPORTER
-        // IMPORTANT: If proxying is needed, we need to handle the socket connection manually.
         let transporter;
 
         if (proxyAgent) {
-            // Advanced: Manual SOCKS Connection
-            // We need updates to support SOCKS properly.
-            // For this demo implementation, we will log the proxy attempt but fall back to direct connection 
-            // OR standard config if possible. 
-            // Implementing full SOCKS5 handshake in this snippet is complex.
-            // We will simulate the success for the demo unless we use a wrapper.
-            console.log("   [Mock] Proxy connection established via agent.");
-            // In production code, you would use:
-            // const { SocksClient } = require('socks');
-            // let info = await SocksClient.createConnection({ proxy: {...}, destination: {...} });
-            // transporterConfig.stream = info.socket;
-        }
+            // Real SOCKS5 Connection using 'socks' library
+            try {
+                const { SocksClient } = require('socks');
 
-        transporter = nodemailer.createTransport(transporterConfig);
+                // 1. Establish the SOCKS5 connection to the Proxy
+                // The destination is the SMTP server we want to reach (e.g. smtp.gmail.com:465)
+                const info = await SocksClient.createConnection({
+                    proxy: {
+                        host: proxyAgent.host,
+                        port: proxyAgent.port,
+                        type: 5,
+                        userId: proxyAgent.userId,
+                        password: proxyAgent.password
+                    },
+                    command: 'connect',
+                    destination: {
+                        host: transporterConfig.host || (transporterConfig.service === 'gmail' ? 'smtp.gmail.com' : 'localhost'),
+                        port: transporterConfig.port || (transporterConfig.secure ? 465 : 587)
+                    }
+                });
+
+                console.log("   ✅ Proxy tunnel established via " + proxyAgent.host);
+
+                // 2. Pass the established socket to Nodemailer
+                // Nodemailer will use this existing socket instead of creating a new direct one
+                transporterConfig.stream = info.socket;
+                transporter = nodemailer.createTransport(transporterConfig);
+
+            } catch (proxyErr) {
+                console.error("   ❌ Proxy Connection Failed:", proxyErr.message);
+                throw new Error(`Proxy tunnel failed: ${proxyErr.message}`);
+            }
+
+        } else {
+            // Direct Connection
+            transporter = nodemailer.createTransport(transporterConfig);
+        }
 
         // D. PREPARE EMAIL
         const mailOptions = {
