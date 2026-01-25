@@ -21,6 +21,10 @@ app.use(bodyParser.json());
 const myMailRoutes = require("./routes/myMailRoutes");
 app.use("/api/mymail", myMailRoutes);
 
+// Import App Detection Routes
+const appDetectionRoutes = require("./routes/appDetection");
+app.use("/api/app-detect", appDetectionRoutes);
+
 const Numlookup = NumlookupapiModule.default; // get the default class
 
 
@@ -1133,7 +1137,7 @@ app.post("/api/generate-report", uploadMemory.single("file"), async (req, res) =
     const downloadUrl = publicData.publicUrl;
 
     // 4️⃣ Save metadata in DB
-    await supabase.from("report_history").insert([
+    const { error: historyError } = await supabase.from("report_history").insert([
       {
         user_id: userId,
         file_name: fileName,
@@ -1142,6 +1146,12 @@ app.post("/api/generate-report", uploadMemory.single("file"), async (req, res) =
         created_at: new Date(),
       },
     ]);
+
+    if (historyError) {
+      console.error("❌ Report history insert error:", historyError);
+    } else {
+      console.log("✅ Report history saved successfully");
+    }
 
     // 5️⃣ Respond
     res.json({

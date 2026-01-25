@@ -347,7 +347,41 @@ router.post("/servers/rent-plan", async (req, res) => {
 // ==========================================
 
 router.post("/send-batch", async (req, res) => {
-    const { userId, serverId, smtpConfig, messageConfig, recipient } = req.body;
+    const { userId, serverId: rawServerId, smtpConfig: rawConfig, messageConfig, recipient } = req.body;
+
+    // SAFEGUARD: Force direct if 'direct' (case-insensitive) or falsy
+    let serverId = rawServerId;
+    if (!serverId || String(serverId).toLowerCase().trim() === "direct" || String(serverId) === "undefined") {
+        serverId = "direct";
+    }
+
+    // Capture logs to file because console checks are failing
+    const fs = require('fs');
+    fs.appendFileSync('debug_log.txt', `[${new Date().toISOString()}] Payload: ` + JSON.stringify({
+        userId, rawServerId, resolvedServerId: serverId, recipient: recipient.email
+    }) + "\n");
+
+    // Normalize config keys (Host -> host, Port -> port) AND sanitize values
+    const smtpConfig = {};
+    if (rawConfig) {
+        Object.keys(rawConfig).forEach(k => {
+            const key = k.toLowerCase().trim();
+            const val = rawConfig[k];
+
+            // Trim strings
+            if (typeof val === 'string') {
+                smtpConfig[key] = val.trim();
+            } else {
+                smtpConfig[key] = val;
+            }
+        });
+    }
+
+    // Ensure port is a number
+    if (smtpConfig.port) {
+        smtpConfig.port = parseInt(smtpConfig.port, 10);
+    }
+
 
     console.log(`📧 Sending to ${recipient.email} via ${smtpConfig.type} (Server: ${serverId || "Direct"})`);
 
@@ -357,6 +391,7 @@ router.post("/send-batch", async (req, res) => {
         // A. PROXY CONFIGURATION
         let proxyAgent = null;
         if (serverId && serverId !== "direct") {
+            console.log("   🔍 Looking up proxy for ID:", serverId);
             // Fetch Proxy Details from DB
             const { data: proxyServer } = await supabase
                 .from("rented_servers")
@@ -503,7 +538,8 @@ router.post("/send-batch", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Send Error:", error.message);
+        console.error("❌ Send Error:", error);
+        console.error("❌ Stack:", error.stack);
         res.status(500).json({ success: false, error: error.message });
     }
 });
