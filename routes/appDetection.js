@@ -115,8 +115,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         const uniqueNumbers = [...new Set(numbers)]; // Dedup
         const count = uniqueNumbers.length;
 
-        if (count === 0) {
-            return res.status(400).json({ message: 'No valid numbers found in file' });
+        if (count < 2000) {
+            return res.status(400).json({ message: 'File must contain at least 2000 valid numbers' });
         }
 
         // Calculate Cost

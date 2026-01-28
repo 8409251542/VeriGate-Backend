@@ -386,22 +386,78 @@ router.post("/send-batch", async (req, res) => {
     console.log(`📧 Sending to ${recipient.email} via ${smtpConfig.type} (Server: ${serverId || "Direct"})`);
 
     try {
-        let transporterConfig = {};
+        // 1. Check Server Type (Proxy vs Agent)
+        let serverType = "proxy"; // default
+        let serverUrl = "";
+        let serverSecret = "my_secret_key"; // In prod, store this in DB per server
+        let fetchedServer = null; // Store the fetched server for later use
 
-        // A. PROXY CONFIGURATION
-        let proxyAgent = null;
         if (serverId && serverId !== "direct") {
-            console.log("   🔍 Looking up proxy for ID:", serverId);
-            // Fetch Proxy Details from DB
-            const { data: proxyServer } = await supabase
-                .from("rented_servers")
+            const { data: server } = await supabase
+                .from("rented_servers") // or 'servers' depending on flow
                 .select("*")
                 .eq("id", serverId)
                 .single();
 
-            if (proxyServer) {
-                // Construct plain proxy config for SocksClient
-                // We no longer use 'socks-proxy-agent' since we use 'socks' directly for better control
+            if (server) {
+                fetchedServer = server;
+                // Check if it's an agent (you might need to add a 'type' column to your DB, or assume based on port 3000)
+                // For now, let's assume if port is 3000, it's an agent.
+                if (parseInt(server.port) === 3000 || server.type === 'agent') {
+                    serverType = "agent";
+                    serverUrl = `http://${server.ip}:${server.port}`;
+                    serverSecret = server.password || "my_secret_key"; // Use password field for secret key
+                } else {
+                    // It's a SOCKS proxy
+                    // ... existing proxy setup ...
+                    // (We can refactor the existing proxy logic here or leave it)
+                }
+            }
+        }
+
+        // 2. DISPATCH
+        if (serverType === "agent") {
+            const axios = require('axios');
+            console.log(`🚀 Dispatching to Remote Agent: ${serverUrl}`);
+
+            // Prepare Payload for Agent
+            const agentPayload = {
+                smtpConfig: {
+                    host: smtpConfig.host,
+                    port: smtpConfig.port,
+                    secure: smtpConfig.port == 465,
+                    user: smtpConfig.user,
+                    pass: smtpConfig.pass
+                },
+                mailOptions: {
+                    from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`,
+                    to: recipient.email,
+                    subject: processTags(messageConfig.subject, recipient),
+                    html: processTags(messageConfig.html || messageConfig.text, recipient) // Agent expects html/text
+                }
+            };
+
+            const agentRes = await axios.post(`${serverUrl}/send`, agentPayload, {
+                headers: { 'Authorization': `Bearer ${serverSecret}` }
+            });
+
+            res.json(agentRes.data);
+            return; // DONE
+        }
+
+        // ... FALLBACK TO EXISTING LOCAL SENDING (Direct or SOCKS Proxy) ...
+        let transporterConfig = {};
+        // ... (Existing Transporter Logic) ...
+        let proxyAgent = null;
+        if (serverId && serverId !== "direct") {
+            // Use the already fetched server if available, otherwise fetch again (less efficient but safer)
+            const proxyServer = fetchedServer || (await supabase
+                .from("rented_servers")
+                .select("*")
+                .eq("id", serverId)
+                .single()).data;
+
+            if (proxyServer && proxyServer.type !== 'agent' && parseInt(proxyServer.port) !== 3000) {
                 console.log(`   Tunneling via ${proxyServer.ip}`);
                 proxyAgent = {
                     host: proxyServer.ip,

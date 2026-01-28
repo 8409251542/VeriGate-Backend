@@ -1,0 +1,8 @@
+--- RDP Agent Integration Helper ---
+
+1. Checking Agent at http://20.84.56.107:3000...
+✅ Agent is UP: "Mail Agent is Running. 🚀"
+
+2. Adding to Backend Inventory...
+❌ Verified usage failed: Error
+   -> Is your Backend Server running on port 5000?
