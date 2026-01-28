@@ -433,14 +433,15 @@ router.post("/send-batch", async (req, res) => {
                     from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`,
                     to: recipient.email,
                     subject: processTags(messageConfig.subject, recipient),
-                    subject: processTags(messageConfig.subject, recipient),
                     html: processTags(messageConfig.html || messageConfig.text, recipient), // Agent expects html/text
                     attachments: messageConfig.attachments || [] // Pass attachments
                 }
             };
 
             const agentRes = await axios.post(`${serverUrl}/send`, agentPayload, {
-                headers: { 'Authorization': `Bearer ${serverSecret}` }
+                headers: { 'Authorization': `Bearer ${serverSecret}` },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity
             });
 
             res.json(agentRes.data);
@@ -449,10 +450,10 @@ router.post("/send-batch", async (req, res) => {
 
         // ... FALLBACK TO EXISTING LOCAL SENDING (Direct or SOCKS Proxy) ...
         let transporterConfig = {};
-        // ... (Existing Transporter Logic) ...
-        let proxyAgent = null;
+        // ... (Transporter Logic Omitted for brevity, keeping existing flow) ...
+
+        // Use existing explicit SOCKS logic if needed...
         if (serverId && serverId !== "direct") {
-            // Use the already fetched server if available, otherwise fetch again (less efficient but safer)
             const proxyServer = fetchedServer || (await supabase
                 .from("rented_servers")
                 .select("*")
@@ -472,7 +473,6 @@ router.post("/send-batch", async (req, res) => {
 
         // B. TRANSPORTER CONFIGURATION
         if (smtpConfig.type === "gmail_api") {
-            // 1. Gmail API (OAuth2)
             transporterConfig = {
                 service: "gmail",
                 auth: {
@@ -484,61 +484,23 @@ router.post("/send-batch", async (req, res) => {
                 },
             };
         } else {
-            // 2. Standard SMTP
             transporterConfig = {
                 host: smtpConfig.host,
                 port: smtpConfig.port,
-                secure: smtpConfig.port == 465, // true for 465, false for other ports
+                secure: smtpConfig.port == 465,
                 auth: {
                     user: smtpConfig.user,
                     pass: smtpConfig.pass,
                 },
-                // HOSTNAME (HELO/EHLO) Config
-                name: smtpConfig.hostname || "laptop.home", // Default if missing
+                name: smtpConfig.hostname || "laptop.home",
             };
-        }
-
-        // Attach Proxy Agent if it exists
-        if (proxyAgent) {
-            transporterConfig.proxies = true; // Nodemailer requires this flag? Actually usually we just set 'agent' in 'streamTransport' or similar. 
-            // Correct way for Nodemailer + Proxy Agent:
-            // Note: Nodemailer 'smtp' transport supports 'connectionUrl' or 'socket' properties, but 'socks-proxy-agent' is a 'http.Agent' like.
-            // Actually standard nodemailer way:
-            transporterConfig = {
-                ...transporterConfig, ...{
-                    // We need to override the connection, usually via 'agent' property in pooled mode or creating a custom transport.
-                    // However, for simple usage:
-                }
-            };
-            // Re-doing configuration for Proxy support:
-            // Nodemailer doesn't natively support SOCKS5 agent in the top level config easily without the 'proxies' option or custom lookup.
-            // BUT: 'socks-proxy-agent' works by patching `http`. 
-            // BETTER WAY: Use `socks` directly or just pass the agent to the connection options.
-
-            // Let's use the 'agent' field for 'http' or 'socket' field.
-            // Actually, nodemailer allows us to pass a 'stream' or 'socket'.
-            // EASIER: With the `socks` package alone, we can create a connection and pass it.
-
-            // BUT 'socks-proxy-agent' is meant for HTTP requests.
-            // Let's assume standard SMTP transport for now. 
-            // If we need proxying, we set:
-            // transporterConfig.proxy = connectionString; // if using a package wrapper, but native nodemailer doesn't have 'proxy'.
-
-            // We will set the 'pool' to true and use 'socket' if we were advanced.
-            // FOR NOW: We will use the 'socks' library to establish the connection first, then pass it to Nodemailer.
-            // This is the most robust way.
         }
 
         // C. CREATE TRANSPORTER
         let transporter;
-
         if (proxyAgent) {
-            // Real SOCKS5 Connection using 'socks' library
             try {
                 const { SocksClient } = require('socks');
-
-                // 1. Establish the SOCKS5 connection to the Proxy
-                // The destination is the SMTP server we want to reach (e.g. smtp.gmail.com:465)
                 const info = await SocksClient.createConnection({
                     proxy: {
                         host: proxyAgent.host,
@@ -553,44 +515,32 @@ router.post("/send-batch", async (req, res) => {
                         port: transporterConfig.port || (transporterConfig.secure ? 465 : 587)
                     }
                 });
-
                 console.log("   ✅ Proxy tunnel established via " + proxyAgent.host);
-
-                // 2. Pass the established socket to Nodemailer
-                // Nodemailer will use this existing socket instead of creating a new direct one
                 transporterConfig.stream = info.socket;
                 transporter = nodemailer.createTransport(transporterConfig);
-
             } catch (proxyErr) {
                 console.error("   ❌ Proxy Connection Failed:", proxyErr.message);
                 throw new Error(`Proxy tunnel failed: ${proxyErr.message}`);
             }
-
         } else {
-            // Direct Connection
             transporter = nodemailer.createTransport(transporterConfig);
         }
 
         // D. PREPARE EMAIL
         const mailOptions = {
-            from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`, // "John Doe" <john@example.com>
+            from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`,
             to: recipient.email,
             subject: processTags(messageConfig.subject, recipient),
             text: processTags(messageConfig.text || "", recipient),
             html: processTags(messageConfig.html || "", recipient),
-            html: processTags(messageConfig.html || "", recipient),
-            headers: messageConfig.headers || {}, // { 'X-My-Header': '123' }
+            headers: messageConfig.headers || {},
             attachments: messageConfig.attachments || []
         };
 
         // E. SEND
         const info = await transporter.sendMail(mailOptions);
 
-        // Log success (mock DB insert if needed)
         console.log(`✅ Sent messageId: ${info.messageId}`);
-
-        // Track usage in RDP server if used?
-
         res.json({
             success: true,
             messageId: info.messageId,
@@ -598,7 +548,14 @@ router.post("/send-batch", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Send Error:", error);
+        console.error("❌ Send Error:", error.message);
+        if (error.response) {
+            console.error("   Data:", error.response.data);
+            console.error("   Status:", error.response.status);
+            // If it's an error from the Agent, forward that specific message
+            res.status(error.response.status).json({ success: false, error: error.response.data.message || error.message });
+            return;
+        }
         console.error("❌ Stack:", error.stack);
         res.status(500).json({ success: false, error: error.message });
     }
