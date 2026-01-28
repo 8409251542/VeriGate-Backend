@@ -15,7 +15,8 @@ const JSZip = require("jszip");
 const NumlookupapiModule = require("@everapi/numlookupapi-js");
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Import MyMail Routes
 const myMailRoutes = require("./routes/myMailRoutes");

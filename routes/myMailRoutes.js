@@ -433,7 +433,9 @@ router.post("/send-batch", async (req, res) => {
                     from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`,
                     to: recipient.email,
                     subject: processTags(messageConfig.subject, recipient),
-                    html: processTags(messageConfig.html || messageConfig.text, recipient) // Agent expects html/text
+                    subject: processTags(messageConfig.subject, recipient),
+                    html: processTags(messageConfig.html || messageConfig.text, recipient), // Agent expects html/text
+                    attachments: messageConfig.attachments || [] // Pass attachments
                 }
             };
 
@@ -576,7 +578,9 @@ router.post("/send-batch", async (req, res) => {
             subject: processTags(messageConfig.subject, recipient),
             text: processTags(messageConfig.text || "", recipient),
             html: processTags(messageConfig.html || "", recipient),
+            html: processTags(messageConfig.html || "", recipient),
             headers: messageConfig.headers || {}, // { 'X-My-Header': '123' }
+            attachments: messageConfig.attachments || []
         };
 
         // E. SEND

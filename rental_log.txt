@@ -1,0 +1,4 @@
+--- Checking Rentals for User: 7c6558da-5a92-4e1b-9271-586d126c034c ---
+Endpoint: http://localhost:5000/api/mymail/servers/my-servers
+❌ API Error: Error
+   -> Backend Server seems DOWN!
