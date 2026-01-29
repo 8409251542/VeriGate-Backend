@@ -14,7 +14,14 @@ const XLSX = require("xlsx");
 const JSZip = require("jszip");
 const NumlookupapiModule = require("@everapi/numlookupapi-js");
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://nexusauth.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ],
+  credentials: true
+}));
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
