@@ -5,11 +5,10 @@ const PORT = 3000;
 const SECRET = 'localhost';
 const BACKEND_URL = 'http://localhost:5000/api/mymail/admin/servers';
 
-const fs = require('fs');
+// const fs = require('fs');
 
 function log(msg) {
     console.log(msg);
-    try { fs.appendFileSync('rdp_log.txt', msg + '\n'); } catch (e) { }
 }
 
 (async () => {

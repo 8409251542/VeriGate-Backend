@@ -4,10 +4,9 @@ const API_URL = "http://localhost:5000/api/mymail";
 // UUID seen in previous logs
 const TARGET_USER_ID = "7c6558da-5a92-4e1b-9271-586d126c034c";
 
-const fs = require('fs');
+// const fs = require('fs');
 function log(msg) {
     console.log(msg);
-    try { fs.appendFileSync('rental_log.txt', msg + '\n'); } catch (e) { }
 }
 
 (async () => {

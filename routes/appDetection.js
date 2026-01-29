@@ -12,7 +12,7 @@ require('dotenv').config();
 // Initialize Supabase
 const supabase = createClient(process.env.SUPABASE_URL || 'https://fnnurbqyyhabwmquntlm.supabase.co', process.env.SUPABASE_KEY);
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: '/tmp/' });
 
 // App Type Mapping from "app detection.txt"
 const APP_TYPES = {
@@ -143,7 +143,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         // Create Text File for API Upload (One number per line)
         const uploadContent = uniqueNumbers.join('\n');
-        const uploadFilePath = `uploads/temp_${Date.now()}.txt`;
+        const uploadFilePath = `/tmp/temp_${Date.now()}.txt`;
         fs.writeFileSync(uploadFilePath, uploadContent);
 
         // Upload to External API

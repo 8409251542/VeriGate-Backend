@@ -356,10 +356,10 @@ router.post("/send-batch", async (req, res) => {
     }
 
     // Capture logs to file because console checks are failing
-    const fs = require('fs');
-    fs.appendFileSync('debug_log.txt', `[${new Date().toISOString()}] Payload: ` + JSON.stringify({
+    // Capture logs to console for Vercel
+    console.log(`[${new Date().toISOString()}] Payload: `, JSON.stringify({
         userId, rawServerId, resolvedServerId: serverId, recipient: recipient.email
-    }) + "\n");
+    }));
 
     // Normalize config keys (Host -> host, Port -> port) AND sanitize values
     const smtpConfig = {};
