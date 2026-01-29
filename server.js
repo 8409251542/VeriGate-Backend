@@ -2050,6 +2050,13 @@ app.post("/get-user-details", async (req, res) => {
 
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on http://localhost:${PORT}`)
-);
+
+// Only listen if run directly (Local Dev / Render)
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () =>
+    console.log(`Server running on http://localhost:${PORT}`)
+  );
+}
+
+// Export for Vercel
+module.exports = app;
