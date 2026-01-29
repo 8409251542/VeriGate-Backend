@@ -12,7 +12,7 @@ require("dotenv").config();
 const path = require("path");
 const XLSX = require("xlsx");
 const JSZip = require("jszip");
-const NumlookupapiModule = require("@everapi/numlookupapi-js");
+// const NumlookupapiModule = require("@everapi/numlookupapi-js");
 const app = express();
 app.use(cors({
   origin: [
@@ -33,7 +33,7 @@ app.use("/api/mymail", myMailRoutes);
 const appDetectionRoutes = require("./routes/appDetection");
 app.use("/api/app-detect", appDetectionRoutes);
 
-const Numlookup = NumlookupapiModule.default; // get the default class
+// const Numlookup = NumlookupapiModule.default; // get the default class
 
 
 
@@ -326,13 +326,18 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
     });
   }
 
+
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
+  // Dynamic import for Vercel/CommonJS compatibility
+  const NumlookupapiModule = await import("@everapi/numlookupapi-js");
+  const Numlookup = NumlookupapiModule.default;
+
   const clients = [
     new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
     new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
     new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_4), // 👈 new 
-    // new Numlookup(process.env.NUMLOOKUP_API_KEY_5), // 👈 new
+    new Numlookup(process.env.NUMLOOKUP_API_KEY_4),
+    // new Numlookup(process.env.NUMLOOKUP_API_KEY_5),
   ];
 
   // make sure you initialize these
