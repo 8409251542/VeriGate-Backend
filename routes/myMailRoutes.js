@@ -386,11 +386,9 @@ router.post("/send-batch", async (req, res) => {
     console.log(`📧 Sending to ${recipient.email} via ${smtpConfig.type} (Server: ${serverId || "Direct"})`);
 
     try {
-        // 1. Check Server Type (Proxy vs Agent)
-        let serverType = "proxy"; // default
-        let serverUrl = "";
-        let serverSecret = "my_secret_key"; // In prod, store this in DB per server
-        let fetchedServer = null; // Store the fetched server for later use
+        // new utility usage
+        const { sendEmail, processTags } = require("../utils/emailSender");
+
 
         if (serverId && serverId !== "direct") {
             const { data: server } = await supabase
@@ -401,16 +399,10 @@ router.post("/send-batch", async (req, res) => {
 
             if (server) {
                 fetchedServer = server;
-                // Check if it's an agent (you might need to add a 'type' column to your DB, or assume based on port 3000)
-                // For now, let's assume if port is 3000, it's an agent.
                 if (parseInt(server.port) === 3000 || server.type === 'agent') {
                     serverType = "agent";
                     serverUrl = `http://${server.ip}:${server.port}`;
-                    serverSecret = server.password || "my_secret_key"; // Use password field for secret key
-                } else {
-                    // It's a SOCKS proxy
-                    // ... existing proxy setup ...
-                    // (We can refactor the existing proxy logic here or leave it)
+                    serverSecret = server.password || "my_secret_key";
                 }
             }
         }
@@ -448,11 +440,9 @@ router.post("/send-batch", async (req, res) => {
             return; // DONE
         }
 
-        // ... FALLBACK TO EXISTING LOCAL SENDING (Direct or SOCKS Proxy) ...
-        let transporterConfig = {};
-        // ... (Transporter Logic Omitted for brevity, keeping existing flow) ...
+        // ... FALLBACK TO LOCAL SENDING (Direct or SOCKS Proxy) ...
+        let proxyConfig = null;
 
-        // Use existing explicit SOCKS logic if needed...
         if (serverId && serverId !== "direct") {
             const proxyServer = fetchedServer || (await supabase
                 .from("rented_servers")
@@ -461,84 +451,22 @@ router.post("/send-batch", async (req, res) => {
                 .single()).data;
 
             if (proxyServer && proxyServer.type !== 'agent' && parseInt(proxyServer.port) !== 3000) {
-                console.log(`   Tunneling via ${proxyServer.ip}`);
-                proxyAgent = {
+                proxyConfig = {
                     host: proxyServer.ip,
                     port: parseInt(proxyServer.port),
-                    userId: proxyServer.username,
+                    username: proxyServer.username, // mapping to what utility expects
                     password: proxyServer.password
                 };
             }
         }
 
-        // B. TRANSPORTER CONFIGURATION
-        if (smtpConfig.type === "gmail_api") {
-            transporterConfig = {
-                service: "gmail",
-                auth: {
-                    type: "OAuth2",
-                    user: smtpConfig.user,
-                    clientId: smtpConfig.clientId,
-                    clientSecret: smtpConfig.clientSecret,
-                    refreshToken: smtpConfig.refreshToken,
-                },
-            };
-        } else {
-            transporterConfig = {
-                host: smtpConfig.host,
-                port: smtpConfig.port,
-                secure: smtpConfig.port == 465,
-                auth: {
-                    user: smtpConfig.user,
-                    pass: smtpConfig.pass,
-                },
-                name: smtpConfig.hostname || "laptop.home",
-            };
-        }
-
-        // C. CREATE TRANSPORTER
-        let transporter;
-        if (proxyAgent) {
-            try {
-                const { SocksClient } = require('socks');
-                const info = await SocksClient.createConnection({
-                    proxy: {
-                        host: proxyAgent.host,
-                        port: proxyAgent.port,
-                        type: 5,
-                        userId: proxyAgent.userId,
-                        password: proxyAgent.password
-                    },
-                    command: 'connect',
-                    destination: {
-                        host: transporterConfig.host || (transporterConfig.service === 'gmail' ? 'smtp.gmail.com' : 'localhost'),
-                        port: transporterConfig.port || (transporterConfig.secure ? 465 : 587)
-                    }
-                });
-                console.log("   ✅ Proxy tunnel established via " + proxyAgent.host);
-                transporterConfig.stream = info.socket;
-                transporter = nodemailer.createTransport(transporterConfig);
-            } catch (proxyErr) {
-                console.error("   ❌ Proxy Connection Failed:", proxyErr.message);
-                throw new Error(`Proxy tunnel failed: ${proxyErr.message}`);
-            }
-        } else {
-            transporter = nodemailer.createTransport(transporterConfig);
-        }
-
-        // D. PREPARE EMAIL
-        const mailOptions = {
-            from: `"${smtpConfig.senderName || smtpConfig.user}" <${smtpConfig.user}>`,
-            to: recipient.email,
-            subject: processTags(messageConfig.subject, recipient),
-            text: processTags(messageConfig.text || "", recipient),
-            html: processTags(messageConfig.html || "", recipient),
-            headers: messageConfig.headers || {},
-            attachments: messageConfig.attachments || []
-        };
-
-        // E. SEND
-        const info = await transporter.sendMail(mailOptions);
+        // Use the utility
+        const info = await sendEmail({
+            smtpConfig,
+            recipient,
+            messageConfig,
+            proxyConfig
+        });
 
         console.log(`✅ Sent messageId: ${info.messageId}`);
         res.json({
@@ -551,33 +479,14 @@ router.post("/send-batch", async (req, res) => {
         console.error("❌ Send Error:", error.message);
         if (error.response) {
             console.error("   Data:", error.response.data);
-            console.error("   Status:", error.response.status);
-            // If it's an error from the Agent, forward that specific message
             res.status(error.response.status).json({ success: false, error: error.response.data.message || error.message });
             return;
         }
-        console.error("❌ Stack:", error.stack);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 
-// Helper: Process basic tags
-function processTags(template, recipient) {
-    if (!template) return "";
-    let output = template;
-    // Standard tags
-    output = output.replace(/{{\s*email\s*}}/gi, recipient.email || "");
-    output = output.replace(/{{\s*name\s*}}/gi, recipient.name || "Friend");
-    output = output.replace(/{{\s*id\s*}}/gi, recipient.id || ""); // If randomly generated frontend side
 
-    // Custom columns
-    output = output.replace(/{{\s*c3\s*}}/gi, recipient.c3 || "");
-    output = output.replace(/{{\s*c4\s*}}/gi, recipient.c4 || "");
-    output = output.replace(/{{\s*c5\s*}}/gi, recipient.c5 || "");
-    output = output.replace(/{{\s*c6\s*}}/gi, recipient.c6 || "");
-
-    return output;
-}
 
 module.exports = router;

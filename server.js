@@ -1232,6 +1232,11 @@ app.post("/api/deduct-image-cost", async (req, res) => {
 // Add this to your server.js file
 
 // Invoice Generator API - Costs 2 USDT per generation
+// ------------------------------------------------------------------
+// Invoice Generator API - Costs 2 USDT per generation (Optional Email)
+// ------------------------------------------------------------------
+const { sendEmail } = require("./utils/emailSender");
+
 app.post("/api/generate-invoice", async (req, res) => {
   try {
     const {
@@ -1240,13 +1245,18 @@ app.post("/api/generate-invoice", async (req, res) => {
       phoneNumber,
       supportPhone,
       date,
-      amount,          // can be "189.25", "$189.25", "189.25 USDT" etc.
+      amount,
       transactionId,
       invoiceNumber,
-      logoUrl
+      logoUrl,
+      // Optional Email params
+      emailTo,
+      smtpConfig,      // { host, port, user, pass, ... }
+      emailSubject,
+      emailBody
     } = req.body;
 
-    console.log("📝 Invoice generation request:", { userId, companyName, amount });
+    console.log("📝 Invoice generation request:", { userId, companyName, amount, emailTo });
 
     // Validate required fields
     if (!userId || !companyName || !phoneNumber || amount == null) {
@@ -1273,41 +1283,37 @@ app.post("/api/generate-invoice", async (req, res) => {
       });
     }
 
-    // 2️⃣ Safely parse & format amount (fix NaN)
+    // 2️⃣ Safely parse & format amount
     const rawAmount = amount;
     const numericAmount = parseFloat(String(rawAmount).replace(/[^\d.]/g, ""));
     const amountNumber = isNaN(numericAmount) ? 0 : numericAmount;
-    const amountDisplay = `$${amountNumber.toFixed(2)}`;   // e.g. "$189.25"
+    const amountDisplay = `$${amountNumber.toFixed(2)}`;
 
-    // 3️⃣ Generate invoice HTML (your function)
+    // 3️⃣ Generate invoice HTML
+    const finalInvoiceNumber = invoiceNumber || generateRandomInvoice();
+    const finalTransactionId = transactionId || `TRX-${Math.floor(100000000 + Math.random() * 900000000)}`;
+
     const invoiceHTML = generateInvoiceHTML({
       companyName: companyName || "PAY PAL",
       phoneNumber: phoneNumber || "+1 858 426 0634",
       supportPhone: supportPhone || "+1 800 123 4567",
       date: date || new Date().toISOString().split("T")[0],
-      amount: amountDisplay,   // 👈 ALWAYS a nice string now
-      transactionId:
-        transactionId ||
-        `TRX-${Math.floor(100000000 + Math.random() * 900000000)}`,
-      invoiceNumber: invoiceNumber || generateRandomInvoice(),
-      logoUrl:
-        logoUrl ||
-        "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg",
+      amount: amountDisplay,
+      transactionId: finalTransactionId,
+      invoiceNumber: finalInvoiceNumber,
+      logoUrl: logoUrl || "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg",
     });
 
-    // 4️⃣ Launch headless browser and capture screenshot (bigger & higher quality)
+    // 4️⃣ Capture Screenshot (Puppeteer)
     const puppeteer = require("puppeteer");
-
     const browser = await puppeteer.launch({
       headless: true,
-      executablePath: puppeteer.executablePath(), // 👈 let Puppeteer figure it out
+      executablePath: puppeteer.executablePath(),
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
-
-
     const page = await browser.newPage();
-    await page.setViewport({ width: 1000, height: 650 }); // a bit bigger → larger file
+    await page.setViewport({ width: 1000, height: 650 });
     await page.setContent(invoiceHTML, { waitUntil: "networkidle0" });
 
     const element = await page.$("#invoice-root");
@@ -1317,7 +1323,7 @@ app.post("/api/generate-invoice", async (req, res) => {
       const box = await element.boundingBox();
       screenshotBuffer = await page.screenshot({
         type: "jpeg",
-        quality: 93,  // 🔺 higher quality → roughly 45–50 KB
+        quality: 93,
         clip: {
           x: Math.round(box.x),
           y: Math.round(box.y),
@@ -1326,7 +1332,6 @@ app.post("/api/generate-invoice", async (req, res) => {
         },
       });
     } else {
-      // fallback if #invoice-root not found
       screenshotBuffer = await page.screenshot({
         type: "jpeg",
         quality: 93,
@@ -1336,7 +1341,7 @@ app.post("/api/generate-invoice", async (req, res) => {
 
     await browser.close();
 
-    // 5️⃣ Upload invoice image to Supabase Storage (bucket: Invoice)
+    // 5️⃣ Upload invoice image to Supabase Storage
     const fileName = `invoice_${Date.now()}_${userId}.jpg`;
 
     const { error: storageError } = await supabase.storage
@@ -1348,9 +1353,7 @@ app.post("/api/generate-invoice", async (req, res) => {
 
     if (storageError) {
       console.error("❌ Supabase invoice upload error:", storageError);
-      return res
-        .status(500)
-        .json({ message: "Failed to upload invoice image" });
+      return res.status(500).json({ message: "Failed to upload invoice image" });
     }
 
     const { data: publicData } = supabase.storage
@@ -1359,7 +1362,7 @@ app.post("/api/generate-invoice", async (req, res) => {
 
     const downloadUrl = publicData.publicUrl;
 
-    // 6️⃣ Deduct USDT from user balance
+    // 6️⃣ Deduct USDT
     const newBalance = userData.usdt_balance - invoiceCost;
 
     await supabase
@@ -1367,25 +1370,61 @@ app.post("/api/generate-invoice", async (req, res) => {
       .update({ usdt_balance: newBalance })
       .eq("id", userId);
 
-    // 7️⃣ Save invoice history (store numeric amount + Supabase URL)
+    // 7️⃣ Save invoice history
     await supabase.from("invoice_history").insert([
       {
         user_id: userId,
         company_name: companyName,
-        amount: amountNumber,            // numeric for DB
+        amount: amountNumber, // numeric
         file_path: downloadUrl,
         usdt_used: invoiceCost,
         created_at: new Date(),
       },
     ]);
 
-    // 8️⃣ Response
+    // 8️⃣ [OPTIONAL] Send Email with Attachment
+    let emailStatus = "skipped";
+    if (emailTo && smtpConfig) {
+      try {
+        console.log(`📧 Sending invoice to ${emailTo}...`);
+
+        // Convert Buffer to Base64 for attachment
+        const base64Image = screenshotBuffer.toString("base64");
+
+        await sendEmail({
+          smtpConfig, // must contain { host, port, user, pass }
+          recipient: { email: emailTo, name: "Customer" },
+          messageConfig: {
+            subject: emailSubject || `Invoice ${finalInvoiceNumber} from ${companyName}`,
+            text: emailBody || `Please find attached your invoice for ${amountDisplay}.`,
+            html: `<p>${emailBody || `Please find attached your invoice for <strong>${amountDisplay}</strong>.`}</p>`,
+            attachments: [
+              {
+                filename: `Invoice-${finalInvoiceNumber}.jpg`,
+                content: base64Image,
+                encoding: "base64"
+              },
+              // Allow attaching extra files if passed in request (for generic "attach files" request)
+              ...(req.body.attachments || [])
+            ]
+          }
+        });
+        emailStatus = "sent";
+        console.log("✅ Email sent successfully");
+      } catch (mailErr) {
+        console.error("❌ Failed to send email:", mailErr.message);
+        emailStatus = "failed: " + mailErr.message;
+      }
+    }
+
+    // 9️⃣ Response
     res.json({
-      message: "✅ Invoice generated successfully",
+      message: "✅ Invoice generated" + (emailStatus === "sent" ? " & Email Sent" : ""),
       downloadUrl,
       amount: amountDisplay,
       usdt_used: invoiceCost,
       remaining_balance: newBalance,
+      email_status: emailStatus
     });
 
   } catch (err) {
