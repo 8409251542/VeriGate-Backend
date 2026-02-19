@@ -10,6 +10,7 @@ const axios = require("axios");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 const path = require("path");
+const os = require("os");
 const XLSX = require("xlsx");
 const JSZip = require("jszip");
 // const NumlookupapiModule = require("@everapi/numlookupapi-js");
@@ -43,7 +44,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 
 // Storage for uploaded files
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: os.tmpdir() });
 const uploadMemory = multer({ storage: multer.memoryStorage() });
 
 // Master admin credentials
