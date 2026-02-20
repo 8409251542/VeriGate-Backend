@@ -2174,49 +2174,24 @@ app.post("/api/verify-batch", async (req, res) => {
 });
 
 app.post("/api/finalize-verification", async (req, res) => {
-  const { userId, verifiedRows, totalUploaded, uniqueCount, unverifiedFilePath } = req.body;
+  const { userId, verifiedFilePath, totalUploaded, uniqueCount, verifiedCount, unverifiedFilePath } = req.body;
 
-  if (!userId || !verifiedRows) {
+  if (!userId || !verifiedFilePath) {
     return res.status(400).json({ message: "Missing data" });
   }
 
   try {
-    // 1. Create CSV in memory
-    const verifiedCsv = await new Promise((resolve, reject) => {
-      fastcsv
-        .writeToString(verifiedRows, { headers: true })
-        .then(resolve)
-        .catch(reject);
-    });
-
-    // 2. Upload to Supabase
-    const fileName = `verified-${Date.now()}.csv`;
-    const { data: storageData, error: storageError } = await supabase.storage
-      .from("csv-outputs")
-      .upload(`verified/${fileName}`, Buffer.from(verifiedCsv), {
-        contentType: "text/csv",
-        upsert: true,
-      });
-
-    if (storageError) throw storageError;
-
-    const { data: publicData } = supabase.storage
-      .from("csv-outputs")
-      .getPublicUrl(`verified/${fileName}`);
-
-    const verifiedUrl = publicData.publicUrl;
-
-    // 3. Save History
+    // Save History
     const { data: saved } = await supabase
       .from("verification_history")
       .insert([
         {
           user_id: userId,
-          total_uploaded: totalUploaded || verifiedRows.length,
-          unique_count: uniqueCount || verifiedRows.length,
-          verified_count: verifiedRows.length,
-          file_path: verifiedUrl,
-          unverified_file_path: unverifiedFilePath, // Store original if provided
+          total_uploaded: totalUploaded || 0,
+          unique_count: uniqueCount || 0,
+          verified_count: verifiedCount || 0,
+          file_path: verifiedFilePath,
+          unverified_file_path: unverifiedFilePath,
           created_at: new Date(),
         },
       ])
@@ -2224,7 +2199,7 @@ app.post("/api/finalize-verification", async (req, res) => {
 
     res.json({
       success: true,
-      fileUrl: verifiedUrl,
+      fileUrl: verifiedFilePath,
       historyId: saved?.[0]?.id
     });
 
