@@ -2099,6 +2099,22 @@ app.post("/get-user-details", async (req, res) => {
 
 const costPerVerification = 0.0011;
 
+// Global Settings (In-memory for now, resets on restart)
+let globalSettings = {
+  verificationMode: "hybrid", // "api", "hybrid", "local"
+};
+
+app.get("/api/admin/verification-mode", (req, res) => {
+  res.json({ mode: globalSettings.verificationMode });
+});
+
+app.post("/api/admin/verification-mode", (req, res) => {
+  const { mode } = req.body;
+  if (!["api", "hybrid", "local"].includes(mode)) return res.status(400).json({ message: "Invalid mode" });
+  globalSettings.verificationMode = mode;
+  res.json({ success: true, mode });
+});
+
 app.post("/api/verify-batch", async (req, res) => {
   const { userId, numbers, countryCode } = req.body;
   const defaultCountryCode = countryCode || "+1";
@@ -2125,6 +2141,9 @@ app.post("/api/verify-batch", async (req, res) => {
     // 2. Setup NumVerify logic (simplified for batch)
     const NumlookupapiModule = await import("@everapi/numlookupapi-js");
     const Numlookup = NumlookupapiModule.default;
+    const { parsePhoneNumber } = await import("libphonenumber-js");
+    const { getCarrierInfo } = require("./utils/carrierLookup");
+
     const clients = [
       new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
       new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
@@ -2134,20 +2153,66 @@ app.post("/api/verify-batch", async (req, res) => {
 
     let apiIndex = 0;
 
+    // Local Verification Fallback Helper
+    const localVerify = (phone, defaultCC) => {
+      try {
+        const phoneNumber = parsePhoneNumber(phone, defaultCC);
+        if (!phoneNumber || !phoneNumber.isValid()) return null;
+
+        const cc = phoneNumber.countryCallingCode;
+        const carrierData = getCarrierInfo(cc, phoneNumber.getText());
+
+        return {
+          valid: true,
+          number: phoneNumber.number,
+          local_format: phoneNumber.formatNational(),
+          international_format: phoneNumber.formatInternational(),
+          country_prefix: cc,
+          country_code: phoneNumber.country,
+          country_name: "", // Can be filled if needed
+          location: "",     // Can be filled with geocoding if needed
+          carrier: carrierData.carrier,
+          line_type: carrierData.type,
+          is_local_fallback: true // Flag for tracking
+        };
+      } catch (e) { return null; }
+    };
+
     const results = await Promise.all(numbers.map(async (phone) => {
+      // Minimal formatting
+      let formatted = String(phone).replace(/\D/g, "");
+      if (formatted.length === 10) formatted = `${defaultCountryCode.replace("+", "")}${formatted}`;
+      if (!formatted.startsWith("+")) formatted = `+${formatted}`;
+
+      // If Local Only mode is forced
+      if (globalSettings.verificationMode === "local") {
+        return localVerify(formatted, defaultCountryCode.replace("+", ""));
+      }
+
       const client = clients[apiIndex % (clients.length || 1)];
       apiIndex++;
 
-      // Minimal formatting
-      let formatted = String(phone).replace(/\D/g, "");
-      if (formatted.length === 10) formatted = `${defaultCountryCode}${formatted}`;
-      else if (formatted.length >= 11 && !formatted.startsWith("+")) formatted = `+${formatted}`;
-
       try {
+        // Try API first if not in local-only mode
         const apiRes = await client.validate(formatted);
+
+        // If API Mode is forced, we don't fallback
+        if (globalSettings.verificationMode === "api") {
+          return (apiRes && apiRes.valid) ? apiRes : null;
+        }
+
+        // Hybrid Mode Logic
         if (apiRes && apiRes.valid) return apiRes;
-        return null;
-      } catch (err) { return null; }
+
+        // Safety Fallback for Hybrid
+        return localVerify(formatted, defaultCountryCode.replace("+", ""));
+      } catch (err) {
+        // API failed -> Use Local Fallback if in Hybrid mode
+        if (globalSettings.verificationMode === "hybrid") {
+          return localVerify(formatted, defaultCountryCode.replace("+", ""));
+        }
+        return null; // For "api" mode, failure is failure
+      }
     }));
 
     const verifiedOnes = results.filter(Boolean);
@@ -2220,9 +2285,13 @@ app.post("/api/get-upload-url", async (req, res) => {
 
     if (error) throw error;
 
+    const { data: publicData } = supabase.storage
+      .from("csv-outputs")
+      .getPublicUrl(data.path);
+
     res.json({
       uploadUrl: data.signedUrl,
-      publicUrl: data.signedUrl.split('?')[0]
+      publicUrl: publicData.publicUrl
     });
   } catch (err) {
     console.error("Signed URL Error:", err);

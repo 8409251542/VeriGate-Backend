@@ -22,8 +22,10 @@
     "express": "^5.1.0",
     "fast-csv": "^5.0.5",
     "jszip": "^3.10.1",
+    "libphonenumber-js": "^1.12.37",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.11",
+    "papaparse": "^5.5.3",
     "socks": "^2.8.7",
     "socks-proxy-agent": "^8.0.5",
     "xlsx": "^0.18.5"
