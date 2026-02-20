@@ -17,19 +17,8 @@ const JSZip = require("jszip");
 const app = express();
 app.use(cors({
   origin: "https://nexusauth.vercel.app",
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["X-CSRF-Token", "X-Requested-With", "Accept", "Accept-Version", "Content-Length", "Content-MD5", "Content-Type", "Date", "X-Api-Version", "Authorization"]
+  credentials: true
 }));
-
-// Explicit OPTIONS handler for preflight requests
-app.options("*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "https://nexusauth.vercel.app");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-  res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.sendStatus(200);
-});
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
@@ -2071,34 +2060,6 @@ app.get("/api/tools/:toolName", async (req, res) => {
 
 
 
-// Get User Details (Balance)
-app.post("/get-user-details", async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ message: "userId required" });
-
-    const { data: userData, error } = await supabase
-      .from("user_limits")
-      .select("usdt_balance")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!userData) return res.status(404).json({ message: "User not found" });
-
-    // Try to get last recharge (optional, strictly for dashboard parity if needed)
-    // For ImageTools, only usdt_balance is critical.
-
-    res.json({
-      usdt_balance: userData.usdt_balance,
-      // Mocking last_recharge if not querying it, to prevent frontend crash if it expects it
-      last_recharge: null
-    });
-  } catch (err) {
-    console.error("Error fetching user details:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
 
 // ==========================================
 // BATCH VERIFICATION ENDPOINTS (for 150k+ files)
