@@ -6,9 +6,18 @@ const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
 // Connect to Supabase
-const SUPABASE_URL = "https://fnnurbqyyhabwmquntlm.supabase.co"; // Using hardcoded based on server.js
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://fnnurbqyyhabwmquntlm.supabase.co";
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let supabase;
+if (SUPABASE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+    console.warn("⚠️ myMailRoutes: SUPABASE_KEY is missing.");
+    supabase = {
+        from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } }) }), insert: () => Promise.resolve({ error: { message: "Supabase not configured" } }), update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }) })
+    };
+}
 
 // Helper to check for Admin (Reusing logic concept)
 // For routes here, we'll rely on simple userId checks or assume middleware handles auth if added later.

@@ -13,7 +13,9 @@ const path = require("path");
 const os = require("os");
 const XLSX = require("xlsx");
 const JSZip = require("jszip");
-// const NumlookupapiModule = require("@everapi/numlookupapi-js");
+const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const Numlookup = require("@everapi/numlookupapi-js").default;
+const { getCarrierInfo } = require("./utils/carrierLookup");
 const app = express();
 
 app.use(cors({
@@ -45,9 +47,21 @@ app.use("/api/app-detect", appDetectionRoutes);
 
 
 
-const SUPABASE_URL = "https://fnnurbqyyhabwmquntlm.supabase.co"; // replace
-const SUPABASE_KEY = process.env.SUPABASE_KEY; // use service_role for backend
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://fnnurbqyyhabwmquntlm.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+let supabase;
+if (SUPABASE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+  console.warn("⚠️ SUPABASE_KEY is missing. Database features will be disabled.");
+  // Mock supabase to prevent immediate crashes, though actual calls will still fail
+  supabase = {
+    auth: { admin: {}, signInWithPassword: () => Promise.resolve({ error: { message: "Supabase not configured" } }) },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }), single: () => Promise.resolve({ data: null, error: null }), order: () => ({ select: () => ({}) }) }) }), insert: () => Promise.resolve({ error: { message: "Supabase not configured" } }), update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }) }),
+    storage: { from: () => ({ upload: () => Promise.resolve({ error: { message: "Supabase not configured" } }), getPublicUrl: () => ({ data: { publicUrl: "" } }), createSignedUploadUrl: () => Promise.resolve({ error: { message: "Supabase not configured" } }), createSignedUrl: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }) }
+  };
+}
 
 
 // Storage for uploaded files
@@ -336,9 +350,6 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
 
 
   // 4️⃣ Setup multi-API clients (EverAPI Numlookup as example)
-  // Dynamic import for Vercel/CommonJS compatibility
-  const NumlookupapiModule = await import("@everapi/numlookupapi-js");
-  const Numlookup = NumlookupapiModule.default;
 
   const clients = [
     new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
@@ -2075,10 +2086,6 @@ app.get("/api/tools/:toolName", async (req, res) => {
 // ==========================================
 // BATCH VERIFICATION ENDPOINTS (for 150k+ files)
 // ==========================================
-
-const { parsePhoneNumberFromString } = require('libphonenumber-js');
-const Numlookup = require("@everapi/numlookupapi-js").default;
-const { getCarrierInfo } = require("./utils/carrierLookup");
 
 const costPerVerification = 0.0011;
 

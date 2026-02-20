@@ -10,7 +10,18 @@ const FormData = require('form-data');
 require('dotenv').config();
 
 // Initialize Supabase
-const supabase = createClient(process.env.SUPABASE_URL || 'https://fnnurbqyyhabwmquntlm.supabase.co', process.env.SUPABASE_KEY);
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fnnurbqyyhabwmquntlm.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+let supabase;
+if (SUPABASE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+    console.warn("⚠️ appDetection: SUPABASE_KEY is missing.");
+    supabase = {
+        from: () => ({ select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: { message: "Supabase not configured" } }) }) }), update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }), insert: () => Promise.resolve({ error: { message: "Supabase not configured" } }) })
+    };
+}
 
 const upload = multer({ dest: '/tmp/' });
 
