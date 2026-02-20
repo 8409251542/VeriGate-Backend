@@ -1,5 +1,6 @@
 // backend/server.js
 const express = require("express");
+const cors = require("cors");
 const bodyParser = require("body-parser");
 const multer = require("multer");
 const csv = require("csv-parser");
@@ -15,26 +16,20 @@ const JSZip = require("jszip");
 // const NumlookupapiModule = require("@everapi/numlookupapi-js");
 const app = express();
 
-// Manual Robust CORS Middleware for Vercel
-app.use((req, res, next) => {
-  const allowedOrigins = ["https://nexusauth.vercel.app"];
-  const origin = req.headers.origin;
+app.use(cors({
+  origin: "https://nexusauth.vercel.app",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Accept-Version", "X-Api-Version", "X-CSRF-Token"]
+}));
 
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
+// Fallback OPTIONS handler
+app.options("*", cors());
 
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-  res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization");
-
-  // Handle Preflight
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  next();
+app.get("/", (req, res) => {
+  res.send("NexAuth API is running...");
 });
+
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
