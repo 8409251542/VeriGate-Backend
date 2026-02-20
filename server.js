@@ -2097,11 +2097,43 @@ app.post("/get-user-details", async (req, res) => {
 // BATCH VERIFICATION ENDPOINTS (for 150k+ files)
 // ==========================================
 
+const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const Numlookup = require("@everapi/numlookupapi-js").default;
+const { getCarrierInfo } = require("./utils/carrierLookup");
+
 const costPerVerification = 0.0011;
 
 // Global Settings (In-memory for now, resets on restart)
 let globalSettings = {
   verificationMode: "hybrid", // "api", "hybrid", "local"
+};
+
+const localVerify = (phone, defaultCC) => {
+  try {
+    const phoneNumber = parsePhoneNumberFromString(phone);
+    if (!phoneNumber || !phoneNumber.isValid()) {
+      console.log(`[localVerify] FAILED validation for: ${phone}`);
+      return null;
+    }
+
+    const cc = phoneNumber.countryCallingCode;
+    const carrierData = getCarrierInfo(cc, phoneNumber.number);
+
+    return {
+      valid: true,
+      number: phoneNumber.number,
+      local_format: phoneNumber.formatNational(),
+      international_format: phoneNumber.formatInternational(),
+      country_prefix: cc,
+      country_code: phoneNumber.country,
+      carrier: carrierData.carrier,
+      line_type: carrierData.type,
+      is_local_fallback: true
+    };
+  } catch (e) {
+    console.error(`[localVerify] CRASH for ${phone}:`, e.message);
+    return null;
+  }
 };
 
 app.get("/api/admin/verification-mode", (req, res) => {
@@ -2123,99 +2155,75 @@ app.post("/api/verify-batch", async (req, res) => {
     return res.status(400).json({ message: "userId and numbers (array) required" });
   }
 
+  console.log(`[Batch] Start: User ${userId}, ${numbers.length} numbers, Mode: ${globalSettings.verificationMode}`);
+
   try {
     // 1. Check user limit / balance
-    const { data: userData, error } = await supabase
+    const { data: userData, error: dbError } = await supabase
       .from("user_limits")
       .select("*")
       .eq("id", userId)
       .single();
 
-    if (error || !userData) return res.status(404).json({ message: "User not found" });
+    if (dbError || !userData) {
+      console.error(`[Batch] User ${userId} not found or DB Error:`, dbError);
+      return res.status(404).json({ message: "User not found" });
+    }
 
     const totalCost = numbers.length * costPerVerification;
     if (userData.usdt_balance < totalCost) {
+      console.warn(`[Batch] Insufficient balance: ${userData.usdt_balance} < ${totalCost}`);
       return res.status(403).json({ message: "Insufficient balance" });
     }
 
-    // 2. Setup NumVerify logic (simplified for batch)
-    const NumlookupapiModule = await import("@everapi/numlookupapi-js");
-    const Numlookup = NumlookupapiModule.default;
-    const { parsePhoneNumber } = await import("libphonenumber-js");
-    const { getCarrierInfo } = require("./utils/carrierLookup");
-
     const clients = [
-      new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
-      new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-      new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-      new Numlookup(process.env.NUMLOOKUP_API_KEY_4),
-    ].filter(c => c && c.validate);
+      process.env.NUMLOOKUP_API_KEY_1,
+      process.env.NUMLOOKUP_API_KEY_2,
+      process.env.NUMLOOKUP_API_KEY_3,
+      process.env.NUMLOOKUP_API_KEY_4,
+    ].filter(Boolean).map(key => new Numlookup(key));
 
     let apiIndex = 0;
 
-    // Local Verification Fallback Helper
-    const localVerify = (phone, defaultCC) => {
-      try {
-        const phoneNumber = parsePhoneNumber(phone, defaultCC);
-        if (!phoneNumber || !phoneNumber.isValid()) return null;
-
-        const cc = phoneNumber.countryCallingCode;
-        const carrierData = getCarrierInfo(cc, phoneNumber.number);
-
-        return {
-          valid: true,
-          number: phoneNumber.number,
-          local_format: phoneNumber.formatNational(),
-          international_format: phoneNumber.formatInternational(),
-          country_prefix: cc,
-          country_code: phoneNumber.country,
-          country_name: "", // Can be filled if needed
-          location: "",     // Can be filled with geocoding if needed
-          carrier: carrierData.carrier,
-          line_type: carrierData.type,
-          is_local_fallback: true // Flag for tracking
-        };
-      } catch (e) { return null; }
-    };
-
     const results = await Promise.all(numbers.map(async (phone) => {
-      // Minimal formatting
+      // Clean and format
       let formatted = String(phone).replace(/\D/g, "");
       if (formatted.length === 10) formatted = `${defaultCountryCode.replace("+", "")}${formatted}`;
       if (!formatted.startsWith("+")) formatted = `+${formatted}`;
 
-      // If Local Only mode is forced
+      // Mode: Local Only
       if (globalSettings.verificationMode === "local") {
         return localVerify(formatted, defaultCountryCode.replace("+", ""));
       }
 
-      const client = clients[apiIndex % (clients.length || 1)];
+      // Mode: API or Hybrid
+      if (clients.length === 0) {
+        if (globalSettings.verificationMode === "hybrid") return localVerify(formatted, defaultCountryCode.replace("+", ""));
+        return null;
+      }
+
+      const client = clients[apiIndex % clients.length];
       apiIndex++;
 
       try {
-        // Try API first if not in local-only mode
         const apiRes = await client.validate(formatted);
-
-        // If API Mode is forced, we don't fallback
-        if (globalSettings.verificationMode === "api") {
-          return (apiRes && apiRes.valid) ? apiRes : null;
-        }
-
-        // Hybrid Mode Logic
         if (apiRes && apiRes.valid) return apiRes;
 
-        // Safety Fallback for Hybrid
-        return localVerify(formatted, defaultCountryCode.replace("+", ""));
-      } catch (err) {
-        // API failed -> Use Local Fallback if in Hybrid mode
         if (globalSettings.verificationMode === "hybrid") {
           return localVerify(formatted, defaultCountryCode.replace("+", ""));
         }
-        return null; // For "api" mode, failure is failure
+        return null;
+      } catch (err) {
+        if (globalSettings.verificationMode === "hybrid") {
+          return localVerify(formatted, defaultCountryCode.replace("+", ""));
+        }
+        return null;
       }
     }));
 
     const verifiedOnes = results.filter(Boolean);
+    console.log(`[Batch] Done: ${verifiedOnes.length}/${numbers.length} valid.`);
+
     const costToDeduct = verifiedOnes.length * costPerVerification;
 
     // 3. Deduct Balance
