@@ -2093,6 +2093,167 @@ app.post("/get-user-details", async (req, res) => {
   }
 });
 
+// ==========================================
+// BATCH VERIFICATION ENDPOINTS (for 150k+ files)
+// ==========================================
+
+const costPerVerification = 0.0011;
+
+app.post("/api/verify-batch", async (req, res) => {
+  const { userId, numbers, countryCode } = req.body;
+  const defaultCountryCode = countryCode || "+1";
+
+  if (!userId || !numbers || !Array.isArray(numbers)) {
+    return res.status(400).json({ message: "userId and numbers (array) required" });
+  }
+
+  try {
+    // 1. Check user limit / balance
+    const { data: userData, error } = await supabase
+      .from("user_limits")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error || !userData) return res.status(404).json({ message: "User not found" });
+
+    const totalCost = numbers.length * costPerVerification;
+    if (userData.usdt_balance < totalCost) {
+      return res.status(403).json({ message: "Insufficient balance" });
+    }
+
+    // 2. Setup NumVerify logic (simplified for batch)
+    const NumlookupapiModule = await import("@everapi/numlookupapi-js");
+    const Numlookup = NumlookupapiModule.default;
+    const clients = [
+      new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
+      new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
+      new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
+      new Numlookup(process.env.NUMLOOKUP_API_KEY_4),
+    ].filter(c => c && c.validate);
+
+    let apiIndex = 0;
+
+    const results = await Promise.all(numbers.map(async (phone) => {
+      const client = clients[apiIndex % (clients.length || 1)];
+      apiIndex++;
+
+      // Minimal formatting
+      let formatted = String(phone).replace(/\D/g, "");
+      if (formatted.length === 10) formatted = `${defaultCountryCode}${formatted}`;
+      else if (formatted.length >= 11 && !formatted.startsWith("+")) formatted = `+${formatted}`;
+
+      try {
+        const apiRes = await client.validate(formatted);
+        if (apiRes && apiRes.valid) return apiRes;
+        return null;
+      } catch (err) { return null; }
+    }));
+
+    const verifiedOnes = results.filter(Boolean);
+    const costToDeduct = verifiedOnes.length * costPerVerification;
+
+    // 3. Deduct Balance
+    if (costToDeduct > 0) {
+      await supabase
+        .from("user_limits")
+        .update({ usdt_balance: userData.usdt_balance - costToDeduct })
+        .eq("id", userId);
+    }
+
+    res.json({
+      success: true,
+      results: verifiedOnes,
+      count: verifiedOnes.length
+    });
+
+  } catch (err) {
+    console.error("Batch Error:", err);
+    res.status(500).json({ message: "Batch processing failed" });
+  }
+});
+
+app.post("/api/finalize-verification", async (req, res) => {
+  const { userId, verifiedRows, totalUploaded, uniqueCount, unverifiedFilePath } = req.body;
+
+  if (!userId || !verifiedRows) {
+    return res.status(400).json({ message: "Missing data" });
+  }
+
+  try {
+    // 1. Create CSV in memory
+    const verifiedCsv = await new Promise((resolve, reject) => {
+      fastcsv
+        .writeToString(verifiedRows, { headers: true })
+        .then(resolve)
+        .catch(reject);
+    });
+
+    // 2. Upload to Supabase
+    const fileName = `verified-${Date.now()}.csv`;
+    const { data: storageData, error: storageError } = await supabase.storage
+      .from("csv-outputs")
+      .upload(`verified/${fileName}`, Buffer.from(verifiedCsv), {
+        contentType: "text/csv",
+        upsert: true,
+      });
+
+    if (storageError) throw storageError;
+
+    const { data: publicData } = supabase.storage
+      .from("csv-outputs")
+      .getPublicUrl(`verified/${fileName}`);
+
+    const verifiedUrl = publicData.publicUrl;
+
+    // 3. Save History
+    const { data: saved } = await supabase
+      .from("verification_history")
+      .insert([
+        {
+          user_id: userId,
+          total_uploaded: totalUploaded || verifiedRows.length,
+          unique_count: uniqueCount || verifiedRows.length,
+          verified_count: verifiedRows.length,
+          file_path: verifiedUrl,
+          unverified_file_path: unverifiedFilePath, // Store original if provided
+          created_at: new Date(),
+        },
+      ])
+      .select("id");
+
+    res.json({
+      success: true,
+      fileUrl: verifiedUrl,
+      historyId: saved?.[0]?.id
+    });
+
+  } catch (err) {
+    console.error("Finalize Error:", err);
+    res.status(500).json({ message: "Finalization failed" });
+  }
+});
+
+app.post("/api/get-upload-url", async (req, res) => {
+  const { fileName } = req.body;
+  if (!fileName) return res.status(400).json({ message: "fileName is required" });
+
+  try {
+    const { data, error } = await supabase.storage
+      .from("csv-outputs")
+      .createSignedUploadUrl(`unverified/${Date.now()}-${fileName}`);
+
+    if (error) throw error;
+
+    res.json({
+      uploadUrl: data.signedUrl,
+      publicUrl: data.signedUrl.split('?')[0]
+    });
+  } catch (err) {
+    console.error("Signed URL Error:", err);
+    res.status(500).json({ message: "Failed to generate upload URL" });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 
