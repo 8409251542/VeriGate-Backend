@@ -2160,7 +2160,7 @@ app.post("/api/verify-batch", async (req, res) => {
         if (!phoneNumber || !phoneNumber.isValid()) return null;
 
         const cc = phoneNumber.countryCallingCode;
-        const carrierData = getCarrierInfo(cc, phoneNumber.getText());
+        const carrierData = getCarrierInfo(cc, phoneNumber.number);
 
         return {
           valid: true,
