@@ -17,6 +17,22 @@ const Numlookup = require("@everapi/numlookupapi-js").default;
 const { getCarrierInfo } = require("./utils/carrierLookup");
 const app = express();
 
+const COST_PER_VERIFICATION = 0.0011;
+const DEBUG_DIR = path.join(__dirname, "uploads", "verified-data", "debug");
+if (!fs.existsSync(DEBUG_DIR)) {
+  fs.mkdirSync(DEBUG_DIR, { recursive: true });
+}
+
+function saveToDebug(fileName, content) {
+  try {
+    const filePath = path.join(DEBUG_DIR, fileName);
+    fs.writeFileSync(filePath, content);
+    console.log(`[Debug] Saved: ${fileName}`);
+  } catch (err) {
+    console.error(`[Debug] Failed to save ${fileName}:`, err.message);
+  }
+}
+
 app.use(cors({
   origin: "https://nexusauth.vercel.app",
   credentials: true,
@@ -237,10 +253,14 @@ app.post("/verify-number", async (req, res) => {
 
     const lineType = apiRes.data.line_type; // "mobile" or "landline"
 
-    // 🔹 Update usage count
+    // 🔹 Update Balance
+    const newBalance = (userData.usdt_balance || 0) - COST_PER_VERIFICATION;
     await supabase
       .from("user_limits")
-      .update({ used: userData.used + 1 })
+      .update({
+        usdt_balance: newBalance,
+        used: (userData.used || 0) + 1
+      })
       .eq("id", userId);
 
     res.json({
@@ -248,8 +268,8 @@ app.post("/verify-number", async (req, res) => {
       lineType,
       carrier: apiRes.data.carrier,
       country: apiRes.data.country_name,
-      used: userData.used + 1,
-      limit: userData.limit,
+      used: (userData.used || 0) + 1,
+      newBalance
     });
   } catch (err) {
     res.status(500).json({ message: "Error verifying number", error: err.message });
@@ -272,6 +292,14 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   const ext = req.file.originalname.split(".").pop().toLowerCase();
 
   console.log("👉 Upload request:", req.file.originalname);
+
+  // Save original file to debug
+  try {
+    const debugFileName = `${Date.now()}-${req.file.originalname}`;
+    fs.copyFileSync(filePath, path.join(DEBUG_DIR, debugFileName));
+  } catch (err) {
+    console.warn("⚠️ Could not save upload to debug:", err.message);
+  }
 
   // 1️⃣ Validate user
   const { data: userData, error } = await supabase
@@ -354,8 +382,7 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   const duplicates = numbers.length - uniqueNumbers.length;
 
   // 3.5️⃣ Upfront Balance Check (Prevent wastage)
-  const costPerVerification = 0.0011;
-  const estimatedCost = uniqueNumbers.length * costPerVerification;
+  const estimatedCost = uniqueNumbers.length * COST_PER_VERIFICATION;
 
   if (userData.usdt_balance < estimatedCost) {
     return res.status(403).json({
@@ -452,7 +479,7 @@ app.post("/upload-csv", upload.single("file"), async (req, res) => {
   // 6️⃣ Update DB usage (only valid numbers count)
   // 🟢 new code: deduct USDT based on verified numbers
 
-  const totalCost = processed * costPerVerification;
+  const totalCost = processed * COST_PER_VERIFICATION;
 
   if (userData.usdt_balance < totalCost) {
     return res.status(403).json({ message: "Not enough USDT balance" });
@@ -2093,7 +2120,6 @@ app.get("/api/tools/:toolName", async (req, res) => {
 // BATCH VERIFICATION ENDPOINTS (for 150k+ files)
 // ==========================================
 
-const costPerVerification = 0.0011;
 
 // Global Settings (In-memory for now, resets on restart)
 let globalSettings = {
@@ -2162,7 +2188,7 @@ app.post("/api/verify-batch", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const totalCost = numbers.length * costPerVerification;
+    const totalCost = numbers.length * COST_PER_VERIFICATION;
     if (userData.usdt_balance < totalCost) {
       console.warn(`[Batch] Insufficient balance: ${userData.usdt_balance} < ${totalCost}`);
       return res.status(403).json({ message: "Insufficient balance" });
@@ -2216,7 +2242,7 @@ app.post("/api/verify-batch", async (req, res) => {
     const verifiedOnes = results.filter(Boolean);
     console.log(`[Batch] Done: ${verifiedOnes.length}/${numbers.length} valid.`);
 
-    const costToDeduct = verifiedOnes.length * costPerVerification;
+    const costToDeduct = verifiedOnes.length * COST_PER_VERIFICATION;
 
     // 3. Deduct Balance
     if (costToDeduct > 0) {
@@ -2261,6 +2287,17 @@ app.post("/api/finalize-verification", async (req, res) => {
         },
       ])
       .select("id");
+
+    // Save summary to debug
+    saveToDebug(`${Date.now()}-summary.json`, JSON.stringify({
+      userId,
+      totalUploaded,
+      uniqueCount,
+      verifiedCount,
+      verifiedFilePath,
+      unverifiedFilePath,
+      timestamp: new Date().toISOString()
+    }, null, 2));
 
     res.json({
       success: true,
