@@ -20,10 +20,24 @@ files.forEach(file => {
         skipEmptyLines: true,
         complete: (results) => {
             results.data.forEach(row => {
-                const cp = row.country_prefix ? row.country_prefix.replace('+', '') : '';
+                let cp = row.country_prefix ? row.country_prefix.replace('+', '') : '';
                 const num = row.local_format || '';
                 const carrier = row.carrier || '';
                 const type = row.line_type || 'unknown';
+
+                // If country_prefix is missing, try to derive it from international_format or number
+                if (!cp) {
+                    const intl = row.international_format || '';
+                    const fullNum = row.number || '';
+                    const target = intl || fullNum;
+
+                    if (target && num) {
+                        const cleanTarget = target.replace('+', '');
+                        if (cleanTarget.endsWith(num)) {
+                            cp = cleanTarget.replace(num, '');
+                        }
+                    }
+                }
 
                 // We need at least country prefix and number
                 if (!cp || !num) return;
