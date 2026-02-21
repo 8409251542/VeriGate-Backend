@@ -57,7 +57,23 @@ if (SUPABASE_KEY) {
   // Mock supabase to prevent immediate crashes, though actual calls will still fail
   supabase = {
     auth: { admin: {}, signInWithPassword: () => Promise.resolve({ error: { message: "Supabase not configured" } }) },
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }), single: () => Promise.resolve({ data: null, error: null }), order: () => ({ select: () => ({}) }) }) }), insert: () => Promise.resolve({ error: { message: "Supabase not configured" } }), update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }) }),
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          single: () => Promise.resolve({ data: null, error: null }),
+          order: () => ({
+            limit: () => Promise.resolve({ data: [], error: null }),
+            select: () => ({})
+          })
+        }),
+        order: () => ({
+          ascending: () => ({})
+        })
+      }),
+      insert: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } }),
+      update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) })
+    }),
     storage: { from: () => ({ upload: () => Promise.resolve({ error: { message: "Supabase not configured" } }), getPublicUrl: () => ({ data: { publicUrl: "" } }), createSignedUploadUrl: () => Promise.resolve({ error: { message: "Supabase not configured" } }), createSignedUrl: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }) }
   };
 }
@@ -701,7 +717,7 @@ app.post("/approve-purchase", async (req, res) => {
     return res.status(500).json({ message: updatePurchaseError.message });
   }
 
-  res.json({ message: "✅ Purchase approved", tokensAdded: tokensToAdd, newLimit });
+  res.json({ message: "✅ Purchase approved", newBalance });
 });
 
 // Reject a purchase (admin)
@@ -1322,42 +1338,33 @@ app.post("/api/generate-invoice", async (req, res) => {
       logoUrl: logoUrl || "https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg",
     });
 
-    // 4️⃣ Capture Screenshot (Puppeteer)
-    const puppeteer = require("puppeteer");
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: puppeteer.executablePath(),
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    // 4️⃣ Capture Screenshot (HCTI API)
+    console.log("📸 Generating invoice image via HCTI...");
+    const hcti_user_id = process.env.HCTI_USER_ID;
+    const hcti_api_key = process.env.HCTI_API_KEY;
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1000, height: 650 });
-    await page.setContent(invoiceHTML, { waitUntil: "networkidle0" });
-
-    const element = await page.$("#invoice-root");
-    let screenshotBuffer;
-
-    if (element) {
-      const box = await element.boundingBox();
-      screenshotBuffer = await page.screenshot({
-        type: "jpeg",
-        quality: 93,
-        clip: {
-          x: Math.round(box.x),
-          y: Math.round(box.y),
-          width: Math.round(box.width),
-          height: Math.round(box.height),
-        },
-      });
-    } else {
-      screenshotBuffer = await page.screenshot({
-        type: "jpeg",
-        quality: 93,
-        fullPage: false,
-      });
+    if (!hcti_user_id || !hcti_api_key) {
+      console.error("❌ HCTI credentials missing");
+      return res.status(500).json({ message: "Invoice generation service not configured" });
     }
 
-    await browser.close();
+    const hctiRes = await axios.post('https://hcti.io/v1/image', {
+      html: invoiceHTML,
+      selector: "#invoice-root",
+      ms_delay: 500
+    }, {
+      auth: {
+        username: hcti_user_id,
+        password: hcti_api_key
+      }
+    });
+
+    const screenshotUrl = hctiRes.data.url;
+    console.log("✅ HCTI Image generated:", screenshotUrl);
+
+    // Download the image buffer
+    const imgRes = await axios.get(screenshotUrl, { responseType: 'arraybuffer' });
+    const screenshotBuffer = Buffer.from(imgRes.data);
 
     // 5️⃣ Upload invoice image to Supabase Storage
     const fileName = `invoice_${Date.now()}_${userId}.jpg`;
