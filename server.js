@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -682,14 +681,14 @@ app.post("/approve-purchase", async (req, res) => {
 
   const newBalance = (userLimit.usdt_balance || 0) + parseFloat(purchase.usdt_amount);
 
-  await supabase
+  const { error: updateLimitError } = await supabase
     .from("user_limits")
     .update({ usdt_balance: newBalance })
     .eq("id", purchase.user_id);
 
 
-  if (updateError) {
-    return res.status(500).json({ message: updateError.message });
+  if (updateLimitError) {
+    return res.status(500).json({ message: updateLimitError.message });
   }
 
   // 4️⃣ Mark purchase approved

@@ -7,7 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 const csv = require('csv-parser');
 const XLSX = require('xlsx');
 const FormData = require('form-data');
-require('dotenv').config();
+// require('dotenv').config();
 
 // Initialize Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fnnurbqyyhabwmquntlm.supabase.co';

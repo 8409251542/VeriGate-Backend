@@ -3,7 +3,7 @@ const router = express.Router();
 const nodemailer = require("nodemailer");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 const { createClient } = require("@supabase/supabase-js");
-require("dotenv").config();
+// require("dotenv").config();
 
 // Connect to Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://fnnurbqyyhabwmquntlm.supabase.co";
