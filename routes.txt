@@ -1,0 +1,121 @@
+﻿
+server.js:36:app.use(cors(
+{
+server.js:44:app.options("
+*", cors());
+server.js:46:app.get("/", 
+(req, res) => {
+server.js:50:app.use(bodyP
+arser.json({ limit: 
+'50mb' }));
+server.js:51:app.use(bodyP
+arser.urlencoded({ limit: 
+'50mb', extended: true 
+}));
+server.js:55:app.use("/api
+/mymail", myMailRoutes);
+server.js:59:app.use("/api
+/app-detect", 
+appDetectionRoutes);
+server.js:119:app.post("/l
+ogin", async (req, res) 
+=> {
+server.js:159:app.post("/a
+dd-user", async (req, 
+res) => {
+server.js:211:app.post("/g
+et-users", async (req, 
+res) => {
+server.js:228:app.post("/v
+erify-number", async 
+(req, res) => {
+server.js:287:app.post("/u
+pload-csv", 
+upload.single("file"), 
+async (req, res) => {
+server.js:562:app.post("/r
+egister", async (req, 
+res) => {
+server.js:595:app.post("/p
+urchase", upload.single("s
+creenshot"), async (req, 
+res) => {
+server.js:668:app.get("/pu
+rchases", async (req, 
+res) => {
+server.js:693:app.post("/a
+pprove-purchase", async 
+(req, res) => {
+server.js:751:app.post("/r
+eject-purchase", async 
+(req, res) => {
+server.js:780:app.post("/g
+et-user-details", async 
+(req, res) => {
+server.js:833:app.get("/ad
+min/history", async (req, 
+res) => {
+server.js:875:app.get("/us
+er-history", async (req, 
+res) => {
+server.js:915:app.post("/a
+pi/generate-invoice", 
+async (req, res) => {
+server.js:1089:app.post("/
+change-password", async 
+(req, res) => {
+server.js:1139:app.post("/
+api/generate-report", uplo
+adMemory.single("file"), 
+async (req, res) => {
+server.js:1243:app.post("/
+api/deduct-image-cost", 
+async (req, res) => {
+server.js:1301:app.post("/
+api/generate-invoice", 
+async (req, res) => {
+server.js:1699:app.use("/u
+ploads/invoices", express.
+static(path.join(__dirname
+, "uploads/invoices")));
+server.js:1702:app.use("/u
+ploads/screenshots", expre
+ss.static(path.join(__dirn
+ame, 
+"uploads/ScreenShots")));
+server.js:1703:app.use("/u
+ploads/verified-data", exp
+ress.static(path.join(__di
+rname, "uploads/verified-d
+ata")));
+server.js:1704:app.use("/u
+ploads/reports", express.s
+tatic(path.join(__dirname,
+ "uploads/reports")));
+server.js:1705:app.use("/r
+eports", express.static(pa
+th.join(__dirname, 
+"uploads/reports")));
+server.js:2037:app.post("/
+api/deduct-image-cost", 
+async (req, res) => {
+server.js:2090:app.get("/a
+pi/tools/:toolName", 
+async (req, res) => {
+server.js:2157:app.get("/a
+pi/admin/verification-mode
+", (req, res) => {
+server.js:2161:app.post("/
+api/admin/verification-mod
+e", (req, res) => {
+server.js:2168:app.post("/
+api/verify-batch", async 
+(req, res) => {
+server.js:2267:app.post("/
+api/finalize-verification"
+, async (req, res) => {
+server.js:2314:app.post("/
+api/get-upload-url", 
+async (req, res) => {
+
+
