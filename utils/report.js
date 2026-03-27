@@ -203,6 +203,64 @@ async function buildZipFromRows(rows, dateStr) {
   return await zip.generateAsync({ type: "nodebuffer" });
 }
 
+function hmsToSeconds(hms) {
+  if (!hms || typeof hms !== "string") return 0;
+  const parts = hms.split(":").map(Number);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return Number(hms) || 0;
+}
+
+function normalizeVoxeraRows(rows) {
+  if (!rows || rows.length === 0) return rows;
+
+  // Detect Voxera format by checking for "CDR Reports" preamble
+  const firstKey = Object.keys(rows[0])[0];
+  const firstVal = String(rows[0][firstKey] || "");
+  const isVoxera = firstKey.includes("CDR Reports") || firstVal.includes("CDR Reports");
+
+  if (!isVoxera) return rows;
+
+  // Find headers (usually at index 3 or nearby)
+  let headerRowIndex = -1;
+  let headers = [];
+
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const vals = Object.values(rows[i]).map(v => String(v).toLowerCase());
+    if (vals.includes("campaign") || vals.includes("sales name") || vals.includes("caller number")) {
+      headerRowIndex = i;
+      headers = Object.values(rows[i]);
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) return rows;
+
+  const dataRows = rows.slice(headerRowIndex + 1);
+  return dataRows.map(row => {
+    const obj = {};
+    const rowValues = Object.values(row);
+    headers.forEach((h, idx) => {
+      if (!h) return;
+      const cleanH = h.trim().toLowerCase();
+      const val = rowValues[idx];
+
+      if (cleanH === "sales name") obj["buyername"] = val;
+      else if (cleanH === "campaign") obj["campname"] = val;
+      else if (cleanH === "duration") obj["billseconds"] = hmsToSeconds(val);
+      else if (cleanH === "forward to") obj["forwardednumber"] = val;
+      else if (cleanH === "caller number") obj["callerid"] = val;
+      else if (cleanH === "date/time") obj["call_start"] = val;
+      else obj[h] = val;
+    });
+    return obj;
+  }).filter(r => r.buyername || r.campname);
+}
+
 module.exports = {
   buildZipFromRows,
   buyerFirstWord,
@@ -213,5 +271,6 @@ module.exports = {
   convertCallStart,
   dropUnwantedColumns,
   groupByCampaign,
-  uniqueRowsByCallerId
+  uniqueRowsByCallerId,
+  normalizeVoxeraRows
 };

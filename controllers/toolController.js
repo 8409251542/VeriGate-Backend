@@ -124,7 +124,9 @@ const generateReport = async (req, res) => {
 
     if (!rows.length) return res.status(400).json({ error: "No rows found" });
 
-    const zipBuffer = await buildZipFromRows(rows, reportDate);
+    // Normalize rows if they are in Voxera CDR format
+    const normalizedRows = normalizeVoxeraRows(rows);
+    const zipBuffer = await buildZipFromRows(normalizedRows, reportDate);
     const fileName = `buyer_reports_${Date.now()}.zip`;
 
     await supabase.storage.from("reports").upload(fileName, zipBuffer, { contentType: "application/zip", upsert: true });
