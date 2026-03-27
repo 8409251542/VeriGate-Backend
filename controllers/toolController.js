@@ -3,7 +3,7 @@ const XLSX = require("xlsx");
 const supabase = require("../config/supabase");
 const { sendEmail } = require("../utils/emailSender"); // Reusing existing util
 const { generateRandomInvoice, generateInvoiceHTML } = require("../utils/invoice");
-const { buildZipFromRows, formatDate } = require("../utils/report");
+const { buildZipFromRows, normalizeVoxeraRows } = require("../utils/report");
 
 const generateInvoice = async (req, res) => {
   try {
