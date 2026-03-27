@@ -4,10 +4,25 @@ const path = require("path");
 const csv = require("csv-parser");
 const fastcsv = require("fast-csv");
 const XLSX = require("xlsx");
-const Numlookup = require("@everapi/numlookupapi-js").default;
 const supabase = require("../config/supabase");
 const { COST_PER_VERIFICATION, DEBUG_DIR } = require("../config/constants");
 const { formatPhone, localVerify } = require("../utils/phone");
+
+let Numlookup;
+async function getNumlookup() {
+    if (Numlookup) return Numlookup;
+    try {
+        const module = await import("@everapi/numlookupapi-js");
+        Numlookup = module.default;
+        return Numlookup;
+    } catch (err) {
+        console.error("Failed to load Numlookup API module:", err);
+        return null;
+    }
+}
+
+// Pre-load
+getNumlookup();
 
 // Vercel friendly debug helper
 function saveToDebug(fileName, content) {
@@ -166,12 +181,13 @@ const uploadCsv = async (req, res) => {
     });
   }
 
-  const clients = [
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_1),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_2),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_3),
-    new Numlookup(process.env.NUMLOOKUP_API_KEY_4),
-  ].filter(c => c.api_key);
+  const NumlookupLib = await getNumlookup();
+  const clients = NumlookupLib ? [
+    process.env.NUMLOOKUP_API_KEY_1,
+    process.env.NUMLOOKUP_API_KEY_2,
+    process.env.NUMLOOKUP_API_KEY_3,
+    process.env.NUMLOOKUP_API_KEY_4,
+  ].filter(Boolean).map(key => new NumlookupLib(key)) : [];
 
   let apiIndex = 0;
 
@@ -267,12 +283,13 @@ const verifyBatch = async (req, res) => {
     const totalCost = numbers.length * COST_PER_VERIFICATION;
     if (userData.usdt_balance < totalCost) return res.status(403).json({ message: "Insufficient balance" });
 
-    const clients = [
+    const NumlookupLib = await getNumlookup();
+    const clients = NumlookupLib ? [
       process.env.NUMLOOKUP_API_KEY_1,
       process.env.NUMLOOKUP_API_KEY_2,
       process.env.NUMLOOKUP_API_KEY_3,
       process.env.NUMLOOKUP_API_KEY_4,
-    ].filter(Boolean).map(key => new Numlookup(key));
+    ].filter(Boolean).map(key => new NumlookupLib(key)) : [];
 
     let apiIndex = 0;
 
