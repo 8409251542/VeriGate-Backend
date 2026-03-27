@@ -3,7 +3,7 @@ const XLSX = require("xlsx");
 const supabase = require("../config/supabase");
 const { sendEmail } = require("../utils/emailSender"); // Reusing existing util
 const { generateRandomInvoice, generateInvoiceHTML } = require("../utils/invoice");
-const { buildZipFromRows, normalizeVoxeraRows } = require("../utils/report");
+const reportUtils = require("../utils/report");
 
 const generateInvoice = async (req, res) => {
   try {
@@ -125,8 +125,8 @@ const generateReport = async (req, res) => {
     if (!rows.length) return res.status(400).json({ error: "No rows found" });
 
     // Normalize rows if they are in Voxera CDR format
-    const normalizedRows = normalizeVoxeraRows(rows);
-    const zipBuffer = await buildZipFromRows(normalizedRows, reportDate);
+    const normalizedRows = reportUtils.normalizeVoxeraRows(rows);
+    const zipBuffer = await reportUtils.buildZipFromRows(normalizedRows, reportDate);
     const fileName = `buyer_reports_${Date.now()}.zip`;
 
     await supabase.storage.from("reports").upload(fileName, zipBuffer, { contentType: "application/zip", upsert: true });
