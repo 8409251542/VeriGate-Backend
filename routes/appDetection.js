@@ -77,7 +77,7 @@ const APP_TYPES = {
     "GroupMe": "FDBF47DB6455672A"
 };
 
-const PRICE_PER_10K = 10; // USDT
+const PRICE_PER_10K = 12.5; // USDT
 
 // Helper to parse file and get numbers
 async function parseFile(filePath, ext) {
