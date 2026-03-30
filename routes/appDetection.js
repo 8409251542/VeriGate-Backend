@@ -188,14 +188,15 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             .update({ usdt_balance: newBalance })
             .eq('id', userId);
 
-        // Save Task to History (Optional but good for tracking)
+        // Save Task to History (Enhanced for categorization)
         await supabase.from('verification_history').insert({
             user_id: userId,
             total_uploaded: count,
             unique_count: count,
-            file_path: apiData.DATA.sendID, // Storing sendID temporarily in file_path or create new column
+            file_path: apiData.DATA.sendID, // Storing sendID temporarily in file_path
+            type: 'app-detect',
+            app_type: appType,
             created_at: new Date(),
-            // You might want to add a 'type' column to verification_history to distinguish 'app-detect' from 'numverify'
         });
 
         res.json({

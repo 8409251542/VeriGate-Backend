@@ -29,13 +29,14 @@ const getUserHistory = async (req, res) => {
   if (!userId) return res.status(400).json({ message: "userId is required" });
 
   try {
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    // Increased window to 7 days for better user experience
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data, error } = await supabase
       .from("verification_history")
       .select("*")
       .eq("user_id", userId)
-      .gte("created_at", threeHoursAgo)
+      .gte("created_at", sevenDaysAgo)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(500).json({ message: error.message });
