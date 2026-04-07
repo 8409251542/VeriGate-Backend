@@ -240,7 +240,6 @@ const uploadCsv = async (req, res) => {
     duplicates,
     unique_count: uniqueNumbers.length,
     verified_count: processed,
-    type: 'numverify',
     created_at: new Date(),
   }]).select("id");
 
@@ -346,7 +345,6 @@ const finalizeVerification = async (req, res) => {
       verified_count: verifiedCount || 0,
       file_path: verifiedFilePath,
       unverified_file_path: unverifiedFilePath,
-      type: 'numverify',
       created_at: new Date(),
     }]).select("id");
 

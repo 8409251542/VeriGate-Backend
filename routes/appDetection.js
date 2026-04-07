@@ -77,6 +77,117 @@ const APP_TYPES = {
     "GroupMe": "FDBF47DB6455672A"
 };
 
+const SERVICE_POINTS = {
+    "Number status detection": 3.571,
+    "TG status detection": 4.286,
+    "TG days detection": 4.286,
+    "TG senior detection": 14.285,
+    "Number active detection": 5.715,
+    "Ws status detection": 0.115,
+    "Ws business detection": 0.55,
+    "Ws days detection": 2.142,
+    "Ws senior detection": 7.143,
+    "Ios status dynamics detection": 2.586,
+    "Ios status static detection": 2.143,
+    "Zalo status detection": 2.143,
+    "Zalo senior detection": 11.429,
+    "Rcs status detection": 2.857,
+    "Line status detection": 7.143,
+    "Line senior detection": 10.0,
+    "Fb status detection": 0.714,
+    "FbEmail status detection": 0.714,
+    "Viber status detection": 1.429,
+    "Viber days detection": 7.143,
+    "Binance status detection": 7.15,
+    "BinanceEmail status detection": 29.52,
+    "Okx status detection": 10.0,
+    "Kucoin status detection": 7.15,
+    "KucoinEmail status detection": 7.15,
+    "CoinW status detection": 2.857,
+    "CoinWEmail status detection": 2.857,
+    "Bybit status detection": 7.15,
+    "Htx status detection": 5.0,
+    "HtxEmail detection": 5.0,
+    "LPLFinancialEmail status detection": 7.14,
+    "Hh status detection": 1.429,
+    "Amazon status detection": 4.286,
+    "AmazonEmail status detection": 4.286,
+    "ins status detection": 0.714,
+    "insEmail status detection": 0.714,
+    "Microsoft status detection": 2.857,
+    "MicrosoftEmail status detection": 2.857,
+    "Twitter status detection": 1.429,
+    "TwitterEmail status detection": 1.429,
+    "Imo status detection": 20.83,
+    "Band status detection": 4.287,
+    "Moniepoint status detection": 4.286,
+    "Ccoupang status detection": 3.571,
+    "Momo status detection": 4.286,
+    "Signal status detection": 4.286,
+    "Botim status detection": 7.143,
+    "Tk status detection": 7.143,
+    "Vk status detection": 7.143,
+    "Cian status detection": 1.143,
+    "RummyCircle status detection": 2.857,
+    "Check24 status detection": 1.429,
+    "Sideline status detection": 1.429,
+    "Linkedln status detection": 7.143,
+    "NetflixEmail status detection": 7.14,
+    "OutlookEmail verification": 0.714,
+    "YahooEmail verification": 0.714,
+    "Mail.ruEmail verification": 0.714,
+    "Carrier status detection": 5.714,
+    "Shopee status detection": 2.142,
+    "DHL status detection": 1.429,
+    "GroupMe status detection": 2.142,
+    "FB Messager status detection": 2.857,
+    "Paytm status detection": 4.286,
+    "Flipkart status detection": 1.15,
+    "Magicbricks status detection": 4.286
+};
+
+// Map user-friendly names to API keys
+const NAME_TO_KEY = {
+    "Viber status detection": "Viber",
+    "Zalo status detection": "Zalo",
+    "Botim status detection": "Botim",
+    "Momo status detection": "Momo",
+    "Signal status detection": "Signal",
+    "Line status detection": "Line",
+    "Linkedln status detection": "LinkedIn",
+    "Amazon status detection": "Amazon",
+    "Fb status detection": "Facebook",
+    "TG status detection": "Telegram",
+    "Vk status detection": "Vk",
+    "Twitter status detection": "Twitter",
+    "Band status detection": "Band",
+    "Rcs status detection": "Rcs",
+    "ins status detection": "Ins",
+    "Moniepoint status detection": "Moniepoint",
+    "Ccoupang status detection": "Coupang",
+    "Microsoft status detection": "Microsoft",
+    "Paytm status detection": "Paytm",
+    "Hh status detection": "Hh",
+    "Sideline status detection": "Sideline",
+    "Check24 status detection": "check24",
+    "RummyCircle status detection": "RummyCircle",
+    "Cian status detection": "Cian",
+    "Htx status detection": "Htx",
+    "Magicbricks status detection": "Magicbricks",
+    "Flipkart status detection": "Flipkart",
+    "Binance status detection": "Binance",
+    "Bybit status detection": "Bybit",
+    "CoinW status detection": "CoinW",
+    "Kucoin status detection": "Kucoin",
+    "Okx status detection": "OKX",
+    "Shopee status detection": "Shopee",
+    "DHL status detection": "DHL",
+    "GroupMe status detection": "GroupMe",
+    "FB Messager status detection": "FBMessage",
+    "Ios status dynamics detection": "Ios(hc)",
+    "Ios status static detection": "Ios(ss)"
+};
+
 const PRICE_PER_10K = 12.5; // USDT
 
 // Helper to parse file and get numbers
@@ -116,7 +227,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             return res.status(400).json({ message: 'Missing file, userId, or appType' });
         }
 
-        const appTypeId = APP_TYPES[appType];
+        const apiKey = NAME_TO_KEY[appType] || appType;
+        const appTypeId = APP_TYPES[apiKey];
         if (!appTypeId) {
             return res.status(400).json({ message: 'Invalid App Type' });
         }
@@ -130,9 +242,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             return res.status(400).json({ message: 'File must contain at least 2000 valid numbers' });
         }
 
-        // Calculate Cost
-        // 10 USDT per 10,000 numbers -> (count / 10000) * 10 = count / 1000
-        const cost = (count / 10000) * PRICE_PER_10K;
+        // Calculate Cost Dynamically
+        // Formula: (Points / 2.587) * 12.5 per 10k numbers
+        const points = SERVICE_POINTS[appType] || 2.587; // Default to base points if not found
+        const costPer10k = (points / 2.587) * 12.5;
+        const cost = (count / 10000) * costPer10k;
 
         // Check Balance
         const { data: userLimit, error: limitError } = await supabase
@@ -188,14 +302,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             .update({ usdt_balance: newBalance })
             .eq('id', userId);
 
-        // Save Task to History (Enhanced for categorization)
+        // Save Task to History (Encoded into file_path due to missing schema columns)
         await supabase.from('verification_history').insert({
             user_id: userId,
             total_uploaded: count,
             unique_count: count,
-            file_path: apiData.DATA.sendID, // Storing sendID temporarily in file_path
-            type: 'app-detect',
-            app_type: appType,
+            file_path: `${appType}|${apiData.DATA.sendID}`, // Format: APP_TYPE|SEND_ID
             created_at: new Date(),
         });
 

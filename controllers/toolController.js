@@ -124,8 +124,9 @@ const generateReport = async (req, res) => {
 
     if (!rows.length) return res.status(400).json({ error: "No rows found" });
 
-    // Normalize rows if they are in Voxera CDR format
-    const normalizedRows = reportUtils.normalizeVoxeraRows(rows);
+    // Normalize rows if they are in Voxera or Dialcs CDR format
+    let normalizedRows = reportUtils.normalizeVoxeraRows(rows);
+    normalizedRows = reportUtils.normalizeDialcsRows(normalizedRows);
     const zipBuffer = await reportUtils.buildZipFromRows(normalizedRows, reportDate);
     const fileName = `buyer_reports_${Date.now()}.zip`;
 

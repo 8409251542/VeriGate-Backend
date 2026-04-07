@@ -261,6 +261,32 @@ function normalizeVoxeraRows(rows) {
   }).filter(r => r.buyername || r.campname);
 }
 
+function normalizeDialcsRows(rows) {
+  if (!rows || rows.length === 0) return rows;
+  
+  // Check if it's Dialcs format
+  const keys = Object.keys(rows[0] || {}).map(k => k.trim().toLowerCase());
+  const isDialcs = keys.includes("talk time") && (keys.includes("caller number") || keys.includes("caller num")) && (keys.includes("target number") || keys.includes("target num"));
+  
+  if (!isDialcs) return rows;
+
+  return rows.map(row => {
+    const obj = {};
+    for (const [key, val] of Object.entries(row)) {
+      const cleanH = key.trim().toLowerCase();
+      
+      if (cleanH === "buyer name") obj["buyername"] = val;
+      else if (cleanH === "campaign") obj["campname"] = val;
+      else if (cleanH === "talk time") obj["billseconds"] = val;
+      else if (cleanH === "target number" || cleanH === "target num") obj["forwardednumber"] = val;
+      else if (cleanH === "caller number" || cleanH === "caller num") obj["callerid"] = val;
+      else if (cleanH === "call date") obj["call_start"] = val;
+      else obj[key] = val;
+    }
+    return obj;
+  });
+}
+
 module.exports = {
   buildZipFromRows,
   buyerFirstWord,
@@ -272,5 +298,6 @@ module.exports = {
   dropUnwantedColumns,
   groupByCampaign,
   uniqueRowsByCallerId,
-  normalizeVoxeraRows
+  normalizeVoxeraRows,
+  normalizeDialcsRows
 };
