@@ -41,8 +41,9 @@ function cleanForwardedAndCaller(rows, colForwarded, colCaller) {
 
 function adjustBillseconds(rows, colBill) {
   rows.forEach((r) => {
+    if (r[colBill] === undefined) return;
     let v = r[colBill];
-    if (v === undefined || v === null || v === "") v = 0;
+    if (v === null || v === "") v = 0;
     v = parseInt(v, 10);
     if (isNaN(v)) v = 0;
 
@@ -75,12 +76,13 @@ function dropUnwantedColumns(rows) {
     "caller_valid", "caller_voip", "abuse_caller", "fraudscore",
     "caller_carrier", "caller_linetype", "caller_risky", "caller_country",
     "caller_name", "caller_spammer", "recordingfile", "ringseconds",
-    "routing_attempt", "duration", "recordingUrl",
+    "routing_attempt", "duration", "recordingurl",
+    "talk time", "ring time", "destination", "fraud score", "carrier", "line type"
   ]);
   return rows.map((row) => {
     const out = {};
     Object.keys(row).forEach((k) => {
-      if (!DROP.has(k)) out[k] = row[k];
+      if (!DROP.has(String(k).toLowerCase().trim())) out[k] = row[k];
     });
     return out;
   });
@@ -121,7 +123,7 @@ async function buildZipFromRows(rows, dateStr) {
   const colCaller = "callerid";
   const colCallStart = keys.includes("call_start") ? "call_start" : null;
 
-  const required = [colCamp, colForwarded, colCaller, colBuyer, colBill];
+  const required = [colCamp, colForwarded, colCaller, colBuyer];
   required.forEach((col) => {
     const hasCol = rows.some((r) => Object.prototype.hasOwnProperty.call(r, col));
     if (!hasCol) throw new Error("Missing required column: " + col);
@@ -277,7 +279,6 @@ function normalizeDialcsRows(rows) {
       
       if (cleanH === "buyer name") obj["buyername"] = val;
       else if (cleanH === "campaign") obj["campname"] = val;
-      else if (cleanH === "talk time") obj["billseconds"] = val;
       else if (cleanH === "target number" || cleanH === "target num") obj["forwardednumber"] = val;
       else if (cleanH === "caller number" || cleanH === "caller num") obj["callerid"] = val;
       else if (cleanH === "call date") obj["call_start"] = val;
