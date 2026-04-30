@@ -3,6 +3,7 @@ const router = express.Router();
 const nodemailer = require("nodemailer");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 const { createClient } = require("@supabase/supabase-js");
+const { recordTransaction } = require("../utils/transactionHelper");
 // require("dotenv").config();
 
 // Connect to Supabase
@@ -161,10 +162,19 @@ router.post("/servers/rent", async (req, res) => {
     }
 
     // 3. Deduct Balance
+    const newBalance = userLimit.usdt_balance - cost;
     await supabase
         .from("user_limits")
-        .update({ usdt_balance: userLimit.usdt_balance - cost })
+        .update({ usdt_balance: newBalance })
         .eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+        userId,
+        "debit",
+        cost,
+        `Proxy Rental: ${server.ip}:${server.port} (${durationHours || 1}h)`
+    );
 
     // 4. Record Purchase / Assign Server
     // Note: For demo, we are "creating" a new rented server record.
@@ -234,10 +244,19 @@ router.post("/servers/rent-quantity", async (req, res) => {
     }
 
     // 5. Deduct Balance
+    const newBalance = userLimit.usdt_balance - totalCost;
     const { error: deductError } = await supabase
         .from("user_limits")
-        .update({ usdt_balance: userLimit.usdt_balance - totalCost })
+        .update({ usdt_balance: newBalance })
         .eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+        userId,
+        "debit",
+        totalCost,
+        `Bulk Proxy Rental: ${quantity} servers (${durationHours || 1}h)`
+    );
 
     if (deductError) return res.status(500).json({ message: "Transaction failed" });
 
@@ -314,10 +333,19 @@ router.post("/servers/rent-plan", async (req, res) => {
     }
 
     // 3. Deduct Balance
+    const newBalance = userLimit.usdt_balance - cost;
     const { error: deductError } = await supabase
         .from("user_limits")
-        .update({ usdt_balance: userLimit.usdt_balance - cost })
+        .update({ usdt_balance: newBalance })
         .eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+        userId,
+        "debit",
+        cost,
+        `Proxy Plan Rental: ${planId}`
+    );
 
     if (deductError) return res.status(500).json({ message: "Transaction failed" });
 

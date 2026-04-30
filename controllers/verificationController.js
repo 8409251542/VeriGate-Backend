@@ -7,6 +7,7 @@ const XLSX = require("xlsx");
 const supabase = require("../config/supabase");
 const { COST_PER_VERIFICATION, DEBUG_DIR } = require("../config/constants");
 const { formatPhone, localVerify } = require("../utils/phone");
+const { recordTransaction } = require("../utils/transactionHelper");
 
 const VERIPHONE_API_KEY = process.env.VERIPHONE_API_KEY;
 
@@ -105,6 +106,14 @@ const verifyNumber = async (req, res) => {
         used: (userData.used || 0) + 1
       })
       .eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+      userId,
+      "debit",
+      COST_PER_VERIFICATION,
+      `Number Verification: ${number}`
+    );
 
     res.json({
       message: `Number ${number} verified`,
@@ -237,6 +246,14 @@ const uploadCsv = async (req, res) => {
   const totalCost = processed * COST_PER_VERIFICATION;
   await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - totalCost }).eq("id", userId);
 
+  // Log transaction
+  await recordTransaction(
+    userId,
+    "debit",
+    totalCost,
+    `Batch Verification: ${processed} numbers`
+  );
+
   const { data: saved } = await supabase.from("verification_history").insert([{
     user_id: userId,
     total_uploaded: numbers.length,
@@ -309,6 +326,14 @@ const verifyBatch = async (req, res) => {
 
     if (costToDeduct > 0) {
       await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - costToDeduct }).eq("id", userId);
+      
+      // Log transaction
+      await recordTransaction(
+        userId,
+        "debit",
+        costToDeduct,
+        `Batch Verification (API): ${verifiedOnes.length} numbers`
+      );
     }
 
     res.json({ success: true, results: verifiedOnes, count: verifiedOnes.length });

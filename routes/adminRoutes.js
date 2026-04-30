@@ -5,5 +5,6 @@ const { isAdmin } = require("../middleware/auth");
 
 router.get("/admin/history", isAdmin, adminController.getAdminHistory);
 router.get("/user-history", adminController.getUserHistory);
+router.get("/transactions", adminController.getTransactions);
 
 module.exports = router;

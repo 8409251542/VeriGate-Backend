@@ -1,5 +1,6 @@
 const fs = require("fs");
 const supabase = require("../config/supabase");
+const { recordTransaction } = require("../utils/transactionHelper");
 
 const submitPurchase = async (req, res) => {
   try {
@@ -117,6 +118,14 @@ const approvePurchase = async (req, res) => {
       .eq("id", purchaseId);
 
     if (updatePurchaseError) return res.status(500).json({ message: updatePurchaseError.message });
+    
+    // Log transaction
+    await recordTransaction(
+      purchase.user_id,
+      "credit",
+      purchase.usdt_amount,
+      `USDT Purchase Approved (${purchase.network})`
+    );
 
     res.json({ message: "✅ Purchase approved", newBalance });
   } catch (err) {

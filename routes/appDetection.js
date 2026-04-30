@@ -7,6 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 const csv = require('csv-parser');
 const XLSX = require('xlsx');
 const FormData = require('form-data');
+const { recordTransaction } = require('../utils/transactionHelper');
 // require('dotenv').config();
 
 // Initialize Supabase
@@ -301,6 +302,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             .from('user_limits')
             .update({ usdt_balance: newBalance })
             .eq('id', userId);
+
+        // Log transaction
+        await recordTransaction(
+            userId,
+            "debit",
+            cost,
+            `App Detection: ${appType} (${count} numbers)`
+        );
 
         // Save Task to History (Encoded into file_path due to missing schema columns)
         await supabase.from('verification_history').insert({

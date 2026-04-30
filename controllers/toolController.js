@@ -4,6 +4,7 @@ const supabase = require("../config/supabase");
 const { sendEmail } = require("../utils/emailSender"); // Reusing existing util
 const { generateRandomInvoice, generateInvoiceHTML } = require("../utils/invoice");
 const reportUtils = require("../utils/report");
+const { recordTransaction } = require("../utils/transactionHelper");
 
 const generateInvoice = async (req, res) => {
   try {
@@ -64,6 +65,14 @@ const generateInvoice = async (req, res) => {
     const newBalance = userData.usdt_balance - invoiceCost;
     await supabase.from("user_limits").update({ usdt_balance: newBalance }).eq("id", userId);
 
+    // Log transaction
+    await recordTransaction(
+      userId,
+      "debit",
+      invoiceCost,
+      `Invoice Generation: ${companyName}`
+    );
+
     await supabase.from("invoice_history").insert([{
       user_id: userId,
       company_name: companyName,
@@ -117,7 +126,16 @@ const generateReport = async (req, res) => {
 
     if (!userData || userData.usdt_balance < reportCost) return res.status(403).json({ message: "Insufficient balance" });
 
-    await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - reportCost }).eq("id", userId);
+    const newBalance = userData.usdt_balance - reportCost;
+    await supabase.from("user_limits").update({ usdt_balance: newBalance }).eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+      userId,
+      "debit",
+      reportCost,
+      `Report Generation: Buyer Report (${reportDate})`
+    );
 
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
@@ -157,6 +175,14 @@ const deductImageCost = async (req, res) => {
 
     const newBalance = userData.usdt_balance - amount;
     await supabase.from("user_limits").update({ usdt_balance: newBalance }).eq("id", userId);
+
+    // Log transaction
+    await recordTransaction(
+      userId,
+      "debit",
+      amount,
+      `Tool Usage: ${toolName}`
+    );
 
     await supabase.from("invoice_history").insert([{
       user_id: userId, company_name: toolName, amount: 0, usdt_used: amount, created_at: new Date()
