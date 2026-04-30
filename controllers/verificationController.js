@@ -8,21 +8,40 @@ const supabase = require("../config/supabase");
 const { COST_PER_VERIFICATION, DEBUG_DIR } = require("../config/constants");
 const { formatPhone, localVerify } = require("../utils/phone");
 
-let Numlookup;
-async function getNumlookup() {
-    if (Numlookup) return Numlookup;
-    try {
-        const module = await import("@everapi/numlookupapi-js");
-        Numlookup = module.default;
-        return Numlookup;
-    } catch (err) {
-        console.error("Failed to load Numlookup API module:", err);
-        return null;
-    }
-}
+const VERIPHONE_API_KEY = process.env.VERIPHONE_API_KEY;
 
-// Pre-load
-getNumlookup();
+async function validatePhoneVeriphone(phone) {
+  if (!VERIPHONE_API_KEY) {
+    console.error("VERIPHONE_API_KEY is not set");
+    return null;
+  }
+  try {
+    const res = await axios.get("https://api.veriphone.io/v2/verify", {
+      params: {
+        key: VERIPHONE_API_KEY,
+        phone: phone,
+      },
+    });
+    const data = res.data;
+    if (data.status === "success") {
+      return {
+        valid: data.phone_valid,
+        number: data.e164 || data.phone,
+        local_format: data.local_number || "",
+        international_format: data.international_number || "",
+        country_code: data.country_code || "",
+        country_name: data.country || "",
+        location: data.phone_region || "",
+        carrier: data.carrier || "",
+        line_type: data.phone_type || "",
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error("Veriphone API error:", err.message);
+    return null;
+  }
+}
 
 // Vercel friendly debug helper
 function saveToDebug(fileName, content) {
@@ -181,25 +200,9 @@ const uploadCsv = async (req, res) => {
     });
   }
 
-  const NumlookupLib = await getNumlookup();
-  const clients = NumlookupLib ? [
-    process.env.NUMLOOKUP_API_KEY_1,
-    process.env.NUMLOOKUP_API_KEY_2,
-    process.env.NUMLOOKUP_API_KEY_3,
-    process.env.NUMLOOKUP_API_KEY_4,
-  ].filter(Boolean).map(key => new NumlookupLib(key)) : [];
-
-  let apiIndex = 0;
-
+  // Veriphone handles its own rate limiting/keys if needed, but here we just use one key
   async function validatePhone(phone) {
-    if (clients.length === 0) return null;
-    const client = clients[apiIndex % clients.length];
-    apiIndex++;
-    try {
-      return await client.validate(phone);
-    } catch (err) {
-      return null;
-    }
+    return await validatePhoneVeriphone(phone);
   }
 
   const batchSize = 50;
@@ -283,16 +286,6 @@ const verifyBatch = async (req, res) => {
     const totalCost = numbers.length * COST_PER_VERIFICATION;
     if (userData.usdt_balance < totalCost) return res.status(403).json({ message: "Insufficient balance" });
 
-    const NumlookupLib = await getNumlookup();
-    const clients = NumlookupLib ? [
-      process.env.NUMLOOKUP_API_KEY_1,
-      process.env.NUMLOOKUP_API_KEY_2,
-      process.env.NUMLOOKUP_API_KEY_3,
-      process.env.NUMLOOKUP_API_KEY_4,
-    ].filter(Boolean).map(key => new NumlookupLib(key)) : [];
-
-    let apiIndex = 0;
-
     const results = await Promise.all(numbers.map(async (phone) => {
       let formatted = String(phone).replace(/\D/g, "");
       if (formatted.length === 10) formatted = `${defaultCountryCode.replace("+", "")}${formatted}`;
@@ -300,16 +293,8 @@ const verifyBatch = async (req, res) => {
 
       if (globalSettings.verificationMode === "local") return localVerify(formatted, defaultCountryCode.replace("+", ""));
 
-      if (clients.length === 0) {
-        if (globalSettings.verificationMode === "hybrid") return localVerify(formatted, defaultCountryCode.replace("+", ""));
-        return null;
-      }
-
-      const client = clients[apiIndex % clients.length];
-      apiIndex++;
-
       try {
-        const apiRes = await client.validate(formatted);
+        const apiRes = await validatePhoneVeriphone(formatted);
         if (apiRes && apiRes.valid) return apiRes;
         if (globalSettings.verificationMode === "hybrid") return localVerify(formatted, defaultCountryCode.replace("+", ""));
         return null;
