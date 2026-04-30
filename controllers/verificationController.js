@@ -346,12 +346,16 @@ const getUploadUrl = async (req, res) => {
   if (!fileName) return res.status(400).json({ message: "fileName is required" });
 
   try {
-    const { data, error } = await supabase.storage.from("csv-outputs").createSignedUploadUrl(`unverified/${Date.now()}-${fileName}`);
+    const folder = fileName.startsWith("verified") ? "verified" : "unverified";
+    const filePath = `${folder}/${Date.now()}-${fileName}`;
+    
+    const { data, error } = await supabase.storage.from("csv-outputs").createSignedUploadUrl(filePath);
     if (error) throw error;
 
     const { data: publicData } = supabase.storage.from("csv-outputs").getPublicUrl(data.path);
     res.json({ uploadUrl: data.signedUrl, publicUrl: publicData.publicUrl });
   } catch (err) {
+    console.error("[getUploadUrl] Error:", err.message);
     res.status(500).json({ message: "Failed to generate upload URL" });
   }
 };
