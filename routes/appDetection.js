@@ -310,6 +310,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             total_uploaded: Number(count),
             unique_count: Number(count),
             duplicates: 0,
+            verified_count: 0, // Added to satisfy NOT NULL constraint
             file_path: `${appType}|${apiData.DATA.sendID}`, // Format: APP_TYPE|SEND_ID
             created_at: new Date(),
         });

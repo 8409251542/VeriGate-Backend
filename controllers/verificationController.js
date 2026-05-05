@@ -8,6 +8,7 @@ const supabase = require("../config/supabase");
 const { COST_PER_VERIFICATION, DEBUG_DIR } = require("../config/constants");
 const { formatPhone, localVerify } = require("../utils/phone");
 const { recordTransaction } = require("../utils/transactionHelper");
+const FormData = require("form-data");
 
 const VERIPHONE_API_KEY = process.env.VERIPHONE_API_KEY;
 
@@ -397,6 +398,183 @@ const getUploadUrl = async (req, res) => {
   }
 };
 
+// --- Veriphone Bulk API Integration ---
+
+const bulkUpload = async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+  const filePath = req.file.path;
+  const originalExt = req.file.originalname.split(".").pop().toLowerCase();
+  let csvPath = filePath;
+
+  try {
+    // Veriphone requires CSV. If it's not CSV, convert it.
+    if (originalExt !== "csv") {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      
+      // Convert to CSV string
+      const csvContent = XLSX.utils.sheet_to_csv(sheet);
+      csvPath = path.join(path.dirname(filePath), `converted-${Date.now()}.csv`);
+      fs.writeFileSync(csvPath, csvContent);
+    }
+
+    const formData = new FormData();
+    formData.append("file", fs.createReadStream(csvPath));
+    formData.append("column", req.body.column || 0);
+    formData.append("firstrow", req.body.firstrow || 1);
+
+    const response = await axios.post("https://api.veriphone.io/v2/file/upload", formData, {
+      headers: {
+        ...formData.getHeaders(),
+        "Authorization": `Bearer ${VERIPHONE_API_KEY}`
+      }
+    });
+
+    if (response.data.result === "success" && req.body.userId) {
+      // Save to history with a special prefix to identify Veriphone Bulk
+      await supabase.from("verification_history").insert([{
+        user_id: req.body.userId,
+        total_uploaded: response.data.lastrow || 0,
+        unique_count: response.data.lastrow || 0,
+        duplicates: 0,
+        verified_count: 0,
+        file_path: `veriphone_bulk|${response.data.id}`, // Store Veriphone ID
+        created_at: new Date(),
+      }]);
+    }
+
+    // Cleanup converted file if created
+    if (csvPath !== filePath) {
+      try { fs.unlinkSync(csvPath); } catch (e) {}
+    }
+
+    res.json(response.data);
+  } catch (err) {
+    console.error("Veriphone Bulk Upload Error:", err.response?.data || err.message);
+    res.status(500).json({ message: "Veriphone upload failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkVerify = async (req, res) => {
+  const { id, userId, default_country } = req.body;
+  if (!id) return res.status(400).json({ message: "Upload ID required" });
+
+  try {
+    // Check balance first
+    if (userId) {
+      const { data: userData } = await supabase.from("user_limits").select("usdt_balance").eq("id", userId).single();
+      const { data: uploadDetails } = await axios.get(`https://api.veriphone.io/v2/file/get?id=${id}`, {
+        headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+      });
+
+      const rowCount = uploadDetails?.lastrow || 0;
+      const estimatedCost = rowCount * COST_PER_VERIFICATION;
+
+      if (userData.usdt_balance < estimatedCost) {
+        return res.status(402).json({ message: `Insufficient balance. Estimated cost: ${estimatedCost.toFixed(4)} USDT` });
+      }
+
+      // Deduct balance
+      await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - estimatedCost }).eq("id", userId);
+      
+      // Log transaction
+      await recordTransaction(userId, "debit", estimatedCost, `Veriphone Bulk Verify: ${rowCount} numbers`);
+    }
+
+    const response = await axios.post(`https://api.veriphone.io/v2/file/verify?id=${id}${default_country ? `&default_country=${default_country}` : ""}`, {}, {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone verify failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkStatus = async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ message: "Upload ID required" });
+
+  try {
+    const response = await axios.get(`https://api.veriphone.io/v2/file/status?id=${id}`, {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone status check failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkGetDetails = async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ message: "Upload ID required" });
+
+  try {
+    const response = await axios.get(`https://api.veriphone.io/v2/file/get?id=${id}`, {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone get details failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkList = async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const response = await axios.get("https://api.veriphone.io/v2/file/list", {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+    });
+
+    if (userId && response.data.status === "success") {
+      // Filter by IDs that belong to this user
+      const { data: userHistory } = await supabase.from("verification_history").select("file_path").eq("user_id", userId);
+      const userUploadIds = userHistory
+        .filter(h => h.file_path && h.file_path.startsWith("veriphone_bulk|"))
+        .map(h => h.file_path.split("|")[1]);
+      
+      response.data.uploads = response.data.uploads.filter(u => userUploadIds.includes(u.id));
+    }
+
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone list failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkDownload = async (req, res) => {
+  const { id, as } = req.query;
+  if (!id) return res.status(400).json({ message: "Upload ID required" });
+
+  try {
+    const response = await axios.get(`https://api.veriphone.io/v2/file/download?id=${id}${as ? `&as=${as}` : ""}`, {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` },
+      responseType: "stream"
+    });
+
+    res.setHeader("Content-Disposition", `attachment; filename="${as || `results-${id}.csv`}"`);
+    res.setHeader("Content-Type", "application/octet-stream");
+    response.data.pipe(res);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone download failed", error: err.response?.data || err.message });
+  }
+};
+
+const bulkDelete = async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ message: "Upload ID required" });
+
+  try {
+    const response = await axios.post(`https://api.veriphone.io/v2/file/delete?id=${id}`, {}, {
+      headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({ message: "Veriphone delete failed", error: err.response?.data || err.message });
+  }
+};
+
 module.exports = {
   getVerificationMode,
   setVerificationMode,
@@ -404,5 +582,12 @@ module.exports = {
   uploadCsv,
   verifyBatch,
   finalizeVerification,
-  getUploadUrl
+  getUploadUrl,
+  bulkUpload,
+  bulkVerify,
+  bulkStatus,
+  bulkGetDetails,
+  bulkList,
+  bulkDownload,
+  bulkDelete
 };
