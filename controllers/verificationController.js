@@ -99,13 +99,17 @@ const verifyNumber = async (req, res) => {
     const lineType = apiRes.data.line_type;
     const newBalance = (userData.usdt_balance || 0) - COST_PER_VERIFICATION;
     
-    await supabase
+    const { error: updateLimitError } = await supabase
       .from("user_limits")
       .update({
         usdt_balance: newBalance,
         used: (userData.used || 0) + 1
       })
       .eq("id", userId);
+
+    if (updateLimitError) {
+      console.error("❌ Balance Update Error:", updateLimitError.message);
+    }
 
     // Log transaction
     await recordTransaction(
@@ -244,7 +248,8 @@ const uploadCsv = async (req, res) => {
   }
 
   const totalCost = processed * COST_PER_VERIFICATION;
-  await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - totalCost }).eq("id", userId);
+  const { error: updateLimitError } = await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - totalCost }).eq("id", userId);
+  if (updateLimitError) console.error("❌ Balance Update Error:", updateLimitError.message);
 
   // Log transaction
   await recordTransaction(
@@ -325,7 +330,8 @@ const verifyBatch = async (req, res) => {
     const costToDeduct = verifiedOnes.length * COST_PER_VERIFICATION;
 
     if (costToDeduct > 0) {
-      await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - costToDeduct }).eq("id", userId);
+      const { error: updateLimitError } = await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - costToDeduct }).eq("id", userId);
+      if (updateLimitError) console.error("❌ Balance Update Error:", updateLimitError.message);
       
       // Log transaction
       await recordTransaction(

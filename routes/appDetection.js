@@ -11,18 +11,7 @@ const { recordTransaction } = require('../utils/transactionHelper');
 // require('dotenv').config();
 
 // Initialize Supabase
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fnnurbqyyhabwmquntlm.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
-let supabase;
-if (SUPABASE_KEY) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-} else {
-    console.warn("⚠️ appDetection: SUPABASE_KEY is missing.");
-    supabase = {
-        from: () => ({ select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: { message: "Supabase not configured" } }) }) }), update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }), insert: () => Promise.resolve({ error: { message: "Supabase not configured" } }) })
-    };
-}
+const supabase = require('../config/supabase');
 
 const upload = multer({ dest: '/tmp/' });
 
@@ -298,10 +287,14 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         // Deduct Balance ONLY if API success
         const newBalance = userLimit.usdt_balance - cost;
-        await supabase
+        const { error: updateError } = await supabase
             .from('user_limits')
             .update({ usdt_balance: newBalance })
             .eq('id', userId);
+
+        if (updateError) {
+            console.error('❌ Balance Deduction Error:', updateError.message);
+        }
 
         // Log transaction
         await recordTransaction(

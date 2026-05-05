@@ -15,18 +15,22 @@ async function recordTransaction(userId, type, amount, description, status = "co
       return null;
     }
 
+    // Ensure amount is a number
+    const numericAmount = typeof amount === "number" ? amount : parseFloat(amount);
+    if (isNaN(numericAmount)) {
+      console.error("❌ recordTransaction: Invalid amount:", amount);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("transactions")
-      .insert([
-        {
-          user_id: userId,
-          type,
-          amount,
-          description,
-          status,
-          created_at: new Date(),
-        },
-      ])
+      .insert({
+        user_id: userId,
+        type,
+        amount: numericAmount,
+        description,
+        status
+      })
       .select()
       .single();
 
