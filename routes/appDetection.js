@@ -312,13 +312,18 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         );
 
         // Save Task to History (Encoded into file_path due to missing schema columns)
-        await supabase.from('verification_history').insert({
+        const { error: historyError } = await supabase.from('verification_history').insert({
             user_id: userId,
-            total_uploaded: count,
-            unique_count: count,
+            total_uploaded: Number(count),
+            unique_count: Number(count),
+            duplicates: 0,
             file_path: `${appType}|${apiData.DATA.sendID}`, // Format: APP_TYPE|SEND_ID
             created_at: new Date(),
         });
+
+        if (historyError) {
+            console.error('❌ App Detect History Error:', historyError);
+        }
 
         res.json({
             message: 'File uploaded successfully',

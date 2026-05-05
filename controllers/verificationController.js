@@ -343,26 +343,32 @@ const verifyBatch = async (req, res) => {
 };
 
 const finalizeVerification = async (req, res) => {
-  const { userId, verifiedFilePath, totalUploaded, uniqueCount, verifiedCount, unverifiedFilePath } = req.body;
+  const { userId, verifiedFilePath, totalUploaded, uniqueCount, verifiedCount, duplicates, unverifiedFilePath } = req.body;
 
   if (!userId || !verifiedFilePath) return res.status(400).json({ message: "Missing data" });
 
   try {
-    const { data: saved } = await supabase.from("verification_history").insert([{
+    const { data: saved, error: insertError } = await supabase.from("verification_history").insert([{
       user_id: userId,
-      total_uploaded: totalUploaded || 0,
-      unique_count: uniqueCount || 0,
-      verified_count: verifiedCount || 0,
+      total_uploaded: Number(totalUploaded) || 0,
+      unique_count: Number(uniqueCount) || 0,
+      verified_count: Number(verifiedCount) || 0,
+      duplicates: Number(duplicates) || 0,
       file_path: verifiedFilePath,
-      unverified_file_path: unverifiedFilePath,
       created_at: new Date(),
     }]).select("id");
 
-    saveToDebug(`${Date.now()}-summary.json`, JSON.stringify({ userId, totalUploaded, uniqueCount, verifiedCount, verifiedFilePath, unverifiedFilePath, timestamp: new Date().toISOString() }, null, 2));
+    if (insertError) {
+      console.error("❌ History Insert Error:", insertError);
+      return res.status(500).json({ message: "Failed to save history", error: insertError.message });
+    }
+
+    saveToDebug(`${Date.now()}-summary.json`, JSON.stringify({ userId, totalUploaded, uniqueCount, verifiedCount, verifiedFilePath, timestamp: new Date().toISOString() }, null, 2));
 
     res.json({ success: true, fileUrl: verifiedFilePath, historyId: saved?.[0]?.id });
   } catch (err) {
-    res.status(500).json({ message: "Finalization failed" });
+    console.error("❌ Finalization Error:", err);
+    res.status(500).json({ message: "Finalization failed", error: err.message });
   }
 };
 
