@@ -464,23 +464,54 @@ const bulkVerify = async (req, res) => {
   try {
     // Check balance first
     if (userId) {
-      const { data: userData } = await supabase.from("user_limits").select("usdt_balance").eq("id", userId).single();
-      const { data: uploadDetails } = await axios.get(`https://api.veriphone.io/v2/file/get?id=${id}`, {
-        headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
-      });
+      console.log(`Starting bulk verify balance check for user: ${userId}, ID: ${id}`);
+      
+      const { data: userData, error: userError } = await supabase.from("user_limits").select("usdt_balance").eq("id", userId).single();
+      if (userError || !userData) {
+          console.error("User balance record not found:", userError);
+          return res.status(404).json({ message: "User balance record not found" });
+      }
 
-      const rowCount = uploadDetails?.lastrow || 0;
+      // Get row count from our history table (saved during upload)
+      const { data: historyItem, error: historyError } = await supabase
+        .from("verification_history")
+        .select("total_uploaded")
+        .eq("user_id", userId)
+        .ilike("file_path", `%|${id}`)
+        .single();
+
+      if (historyError || !historyItem) {
+          console.error("Task history not found for cost calculation:", historyError);
+          // Fallback: try to get from Veriphone list if database lookup fails
+          try {
+            const listRes = await axios.get(`https://api.veriphone.io/v2/file/list`, {
+                headers: { "Authorization": `Bearer ${VERIPHONE_API_KEY}` }
+            });
+            const fileInfo = listRes.data.files?.find(f => f.id === id);
+            if (fileInfo) {
+                historyItem = { total_uploaded: fileInfo.lastrow };
+            } else {
+                return res.status(404).json({ message: "Task info not found in history or API" });
+            }
+          } catch (apiErr) {
+            return res.status(500).json({ message: "Failed to retrieve task details", error: apiErr.message });
+          }
+      }
+
+      const rowCount = historyItem?.total_uploaded || 0;
       const estimatedCost = rowCount * COST_PER_VERIFICATION;
+      console.log(`Task row count: ${rowCount}, Estimated cost: ${estimatedCost}`);
 
       if (userData.usdt_balance < estimatedCost) {
         return res.status(402).json({ message: `Insufficient balance. Estimated cost: ${estimatedCost.toFixed(4)} USDT` });
       }
 
       // Deduct balance
-      await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - estimatedCost }).eq("id", userId);
+      const { error: updateError } = await supabase.from("user_limits").update({ usdt_balance: userData.usdt_balance - estimatedCost }).eq("id", userId);
+      if (updateError) throw updateError;
       
       // Log transaction
-      await recordTransaction(userId, "debit", estimatedCost, `Veriphone Bulk Verify: ${rowCount} numbers`);
+      await recordTransaction(userId, "debit", estimatedCost, `Bulk Verify: ${rowCount} numbers`);
     }
 
     const response = await axios.post(`https://api.veriphone.io/v2/file/verify?id=${id}${default_country ? `&default_country=${default_country}` : ""}`, {}, {
@@ -488,6 +519,7 @@ const bulkVerify = async (req, res) => {
     });
     res.json(response.data);
   } catch (err) {
+    console.error("Bulk Verify Error:", err.response?.data || err.message);
     res.status(500).json({ message: "Veriphone verify failed", error: err.response?.data || err.message });
   }
 };
