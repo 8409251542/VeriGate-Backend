@@ -153,10 +153,21 @@ const generateReport = async (req, res) => {
     const { data: publicData } = supabase.storage.from("reports").getPublicUrl(fileName);
     const downloadUrl = publicData.publicUrl;
 
-    await supabase.from("report_history").insert([{
-      user_id: userId, file_name: fileName, file_path: downloadUrl,
-      usdt_used: reportCost, created_at: new Date(),
+    const { error: insertError } = await supabase.from("report_history").insert([{
+      user_id: userId, 
+      file_name: fileName, 
+      file_path: downloadUrl,
+      tokens_used: Math.round(reportCost * 1000),
     }]);
+
+    if (insertError) {
+      console.error("Failed to log report history:", insertError);
+      return res.json({ 
+        message: "✅ Report generated, but history logging failed.", 
+        downloadUrl,
+        warning: insertError.message 
+      });
+    }
 
     res.json({ message: "✅ Report generated successfully", downloadUrl });
   } catch (err) {
