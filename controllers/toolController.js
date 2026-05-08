@@ -212,9 +212,29 @@ const serveTool = async (req, res) => {
   }
 };
 
+const getReportHistory = async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ message: "userId is required" });
+
+  try {
+    const { data, error } = await supabase
+      .from("report_history")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) return res.status(500).json({ message: error.message });
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   generateInvoice,
   generateReport,
   deductImageCost,
-  serveTool
+  serveTool,
+  getReportHistory
 };
