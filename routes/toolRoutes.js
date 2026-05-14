@@ -8,5 +8,6 @@ router.post("/api/generate-report", uploadMemory.single("file"), toolController.
 router.post("/api/deduct-image-cost", toolController.deductImageCost);
 router.get("/api/report-history", toolController.getReportHistory);
 router.get("/api/tools/:toolName", toolController.serveTool);
+router.post("/api/rewrite-content", toolController.rewriteContent);
 
 module.exports = router;
