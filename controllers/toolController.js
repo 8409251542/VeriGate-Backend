@@ -5,7 +5,6 @@ const { sendEmail } = require("../utils/emailSender"); // Reusing existing util
 const { generateRandomInvoice, generateInvoiceHTML } = require("../utils/invoice");
 const reportUtils = require("../utils/report");
 const { recordTransaction } = require("../utils/transactionHelper");
-const { rewriteContent: rewriteGroq } = require("../utils/groqClient");
 
 const generateInvoice = async (req, res) => {
   try {
@@ -243,25 +242,11 @@ const getReportHistory = async (req, res) => {
   }
 };
 
-const rewriteContent = async (req, res) => {
-  try {
-    const { content } = req.body;
-    if (!content) {
-      return res.status(400).json({ message: "Content is required" });
-    }
-
-    const rewritten = await rewriteGroq(content);
-    res.json({ success: true, rewritten });
-  } catch (err) {
-    res.status(500).json({ message: "Rewriting failed", error: err.message });
-  }
-};
 
 module.exports = {
   generateInvoice,
   generateReport,
   deductImageCost,
   serveTool,
-  getReportHistory,
-  rewriteContent
+  getReportHistory
 };

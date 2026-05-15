@@ -268,7 +268,9 @@ function normalizeDialcsRows(rows) {
   
   // Check if it's Dialcs format
   const keys = Object.keys(rows[0] || {}).map(k => k.trim().toLowerCase());
-  const isDialcs = keys.includes("talk time") && (keys.includes("caller number") || keys.includes("caller num")) && (keys.includes("target number") || keys.includes("target num"));
+  const isDialcs = (keys.includes("talk time") || keys.includes("total time")) && 
+                   (keys.includes("caller number") || keys.includes("caller num") || keys.includes("caller id")) && 
+                   (keys.includes("target number") || keys.includes("target num") || keys.includes("dialed no."));
   
   if (!isDialcs) return rows;
 
@@ -277,11 +279,12 @@ function normalizeDialcsRows(rows) {
     for (const [key, val] of Object.entries(row)) {
       const cleanH = key.trim().toLowerCase();
       
-      if (cleanH === "buyer name") obj["buyername"] = val;
-      else if (cleanH === "campaign") obj["campname"] = val;
-      else if (cleanH === "target number" || cleanH === "target num") obj["forwardednumber"] = val;
-      else if (cleanH === "caller number" || cleanH === "caller num") obj["callerid"] = val;
+      if (cleanH === "buyer name" || cleanH === "buyer nam") obj["buyername"] = val;
+      else if (cleanH === "campaign" || cleanH === "campname") obj["campname"] = val;
+      else if (cleanH === "target number" || cleanH === "target num" || cleanH === "dialed no.") obj["forwardednumber"] = val;
+      else if (cleanH === "caller number" || cleanH === "caller num" || cleanH === "caller id") obj["callerid"] = val;
       else if (cleanH === "call date") obj["call_start"] = val;
+      else if (cleanH === "talk time" || cleanH === "total time") obj["billseconds"] = hmsToSeconds(val);
       else obj[key] = val;
     }
     return obj;
