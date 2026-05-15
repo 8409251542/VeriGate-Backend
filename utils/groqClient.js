@@ -6,7 +6,7 @@ const rewriteContent = async (content) => {
     throw new Error("GROQ_API_KEY is not configured");
   }
 
-  const prompt = `Rewrite this content in about same length, change amount, website, and somewords and sentences as well to look new, but message conveyed should be same:
+  const prompt = `Rewrite this content in about same length, change amount, website between these three(bestbuy.com, Alibaba.com, newegg.com), and somewords and sentences as well to look new, but message conveyed should be same:
 
 ${content}`;
 
