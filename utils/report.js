@@ -206,15 +206,38 @@ async function buildZipFromRows(rows, dateStr) {
 }
 
 function hmsToSeconds(hms) {
-  if (!hms || typeof hms !== "string") return 0;
-  const parts = hms.split(":").map(Number);
+  if (hms === undefined || hms === null) return 0;
+  
+  if (typeof hms === "number") {
+    if (hms < 1) {
+      return Math.round(hms * 86400);
+    }
+    return Math.round(hms);
+  }
+  
+  const str = String(hms).trim();
+  if (!str) return 0;
+  
+  const num = Number(str);
+  if (!isNaN(num)) {
+    if (num < 1) {
+      return Math.round(num * 86400);
+    }
+    return Math.round(num);
+  }
+  
+  const parts = str.split(":").map(Number);
   if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return (isNaN(parts[0]) ? 0 : parts[0]) * 3600 + 
+           (isNaN(parts[1]) ? 0 : parts[1]) * 60 + 
+           (isNaN(parts[2]) ? 0 : parts[2]);
   }
   if (parts.length === 2) {
-    return parts[0] * 60 + parts[1];
+    return (isNaN(parts[0]) ? 0 : parts[0]) * 60 + 
+           (isNaN(parts[1]) ? 0 : parts[1]);
   }
-  return Number(hms) || 0;
+  
+  return 0;
 }
 
 function normalizeVoxeraRows(rows) {
@@ -276,6 +299,16 @@ function normalizeDialcsRows(rows) {
 
   return rows.map(row => {
     const obj = {};
+    // First, check if talk time is present, as it is the most accurate billable duration
+    let hasTalkTime = false;
+    for (const [key, val] of Object.entries(row)) {
+      const cleanH = key.trim().toLowerCase();
+      if (cleanH === "talk time") {
+        hasTalkTime = true;
+        break;
+      }
+    }
+
     for (const [key, val] of Object.entries(row)) {
       const cleanH = key.trim().toLowerCase();
       
@@ -284,8 +317,15 @@ function normalizeDialcsRows(rows) {
       else if (cleanH === "target number" || cleanH === "target num" || cleanH === "dialed no.") obj["forwardednumber"] = val;
       else if (cleanH === "caller number" || cleanH === "caller num" || cleanH === "caller id") obj["callerid"] = val;
       else if (cleanH === "call date") obj["call_start"] = val;
-      else if (cleanH === "talk time" || cleanH === "total time") obj["billseconds"] = hmsToSeconds(val);
-      else obj[key] = val;
+      else if (cleanH === "talk time") {
+        obj["billseconds"] = hmsToSeconds(val);
+      } else if (cleanH === "total time") {
+        if (!hasTalkTime) {
+          obj["billseconds"] = hmsToSeconds(val);
+        }
+      } else {
+        obj[key] = val;
+      }
     }
     return obj;
   });
@@ -303,5 +343,6 @@ module.exports = {
   groupByCampaign,
   uniqueRowsByCallerId,
   normalizeVoxeraRows,
-  normalizeDialcsRows
+  normalizeDialcsRows,
+  hmsToSeconds
 };
