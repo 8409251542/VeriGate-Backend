@@ -6,7 +6,22 @@ const rewriteContent = async (content) => {
     throw new Error("GROQ_API_KEY is not configured");
   }
 
-  const prompt = `Rewrite this content in about same length, change amount, website between these three(bestbuy.com, Alibaba.com, newegg.com), and somewords and sentences as well to look new, but message conveyed should be same:
+  const prompt = `Rewrite the following content while keeping the overall meaning, tone, and approximate length similar.
+
+Rules:
+- ONLY return the rewritten content.
+- DO NOT add introductions, explanations, notes, bullet points, summaries, or closing remarks.
+- DO NOT say things like "Here’s the rewritten version" or "Note:".
+- DO NOT mention what was changed.
+- Change:
+  - Amounts/prices
+  - Website names (use only: bestbuy.com, alibaba.com, newegg.com)
+  - Products (use premium products such as laptops, smartphones, headphones, watches, shoes, bags, etc.)
+  - Locations (use locations from Bangladesh, Russia, Pakistan, India, or Vietnam)
+  - Some wording, sentence structure, and phrasing so the content looks naturally rewritten.
+- Preserve the original intent and format as closely as possible.
+- Keep phone numbers, OTPs, codes, email formats, or transaction/reference styles realistic if present.
+- Output must contain ONLY the rewritten text and nothing else.
 
 ${content}`;
 
