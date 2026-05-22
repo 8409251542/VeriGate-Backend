@@ -14,7 +14,7 @@ Rules:
 - DO NOT say things like "Here’s the rewritten version" or "Note:".
 - DO NOT mention what was changed.
 - Change:
-  - Amounts/prices
+  - Amounts/prices (must be in USD)
   - Website names (use only: bestbuy.com, alibaba.com, newegg.com)
   - Products (use premium products such as laptops, smartphones, headphones, watches, shoes, bags, etc.)
   - Locations (use locations from Bangladesh, Russia, Pakistan, India, or Vietnam)
