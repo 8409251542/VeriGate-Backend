@@ -39,6 +39,16 @@ function cleanForwardedAndCaller(rows, colForwarded, colCaller) {
   });
 }
 
+function isAnsweredCall(row, colBill) {
+  const dispKey = Object.keys(row).find(k => k.trim().toLowerCase() === "disposition");
+  if (dispKey) {
+    const dispVal = String(row[dispKey]).trim().toLowerCase();
+    return dispVal === "answered" || dispVal === "answer";
+  }
+  const duration = parseInt(row[colBill], 10);
+  return !isNaN(duration) && duration > 0;
+}
+
 function adjustBillseconds(rows, colBill) {
   rows.forEach((r) => {
     if (r[colBill] === undefined) return;
@@ -47,10 +57,15 @@ function adjustBillseconds(rows, colBill) {
     v = parseInt(v, 10);
     if (isNaN(v)) v = 0;
 
+    if (v > 0 && isAnsweredCall(r, colBill)) {
+      v += 12;
+    }
+
     r[colBill] = v;
   });
   return rows;
 }
+
 
 function convertCallStart(rows, colCallStart) {
   rows.forEach((r) => {
