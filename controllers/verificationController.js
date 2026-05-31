@@ -214,9 +214,10 @@ const uploadCsv = async (req, res) => {
     });
   }
 
-  // Veriphone handles its own rate limiting/keys if needed, but here we just use one key
+  // Reverted/commented Veriphone API, now using high-precision local verification
   async function validatePhone(phone) {
-    return await validatePhoneVeriphone(phone);
+    return localVerify(phone, defaultCountryCode.replace("+", ""));
+    // return await validatePhoneVeriphone(phone);
   }
 
   const batchSize = 50;
